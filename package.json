@@ -11,7 +11,7 @@
     "deploy": "shopify app deploy",
     "config:use": "shopify app config use",
     "env": "shopify app env",
-    "start": "react-router-serve ./build/server/index.js",
+    "start": "node server-entrypoint.js",
     "docker-start": "npm run setup && npm run start",
     "setup": "node ./scripts/ensure-db.js",
     "lint": "eslint --ignore-path .gitignore --cache --cache-location ./node_modules/.cache/eslint .",
