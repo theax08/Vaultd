@@ -3,7 +3,7 @@ FROM node:20-alpine
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm install --legacy-peer-deps
+RUN npm ci --legacy-peer-deps
 
 COPY prisma ./prisma
 RUN DATABASE_URL="postgresql://user:pass@localhost:5432/db" npx prisma generate
