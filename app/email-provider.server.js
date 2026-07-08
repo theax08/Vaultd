@@ -3,7 +3,15 @@ import { Resend } from "resend";
 
 // Vaultd heberge l'envoi pour tous les marchands depuis un domaine unique
 // verifie dans Resend (EMAIL_FROM) — les marchands n'ont rien a configurer.
-const resend = new Resend(process.env.RESEND_API_KEY);
+let resend = null;
+
+function getResendClient() {
+  if (!process.env.RESEND_API_KEY) return null;
+  if (!resend) {
+    resend = new Resend(process.env.RESEND_API_KEY);
+  }
+  return resend;
+}
 
 /**
  * Envoie un email HTML de base
@@ -17,7 +25,12 @@ export async function sendEmail({ to, subject, html, from, replyTo }) {
     return;
   }
 
-  const { error } = await resend.emails.send({
+  const resendClient = getResendClient();
+  if (!resendClient) {
+    return;
+  }
+
+  const { error } = await resendClient.emails.send({
     from: fromAddress,
     to,
     subject,

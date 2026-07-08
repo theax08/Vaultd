@@ -10,12 +10,28 @@ import { PLAN_LABELS } from "./vaultd-plans.js";
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
 import prisma from "./db.server";
 
+function normalizeAppUrl(value) {
+  if (!value) return "";
+  if (value.startsWith("http://") || value.startsWith("https://")) {
+    return value.replace(/\/$/, "");
+  }
+  return `https://${value}`.replace(/\/$/, "");
+}
+
+const appUrl = normalizeAppUrl(
+  process.env.SHOPIFY_APP_URL ||
+    process.env.APP_URL ||
+    process.env.RAILWAY_PUBLIC_DOMAIN ||
+    process.env.RAILWAY_STATIC_URL ||
+    "",
+);
+
 const shopify = shopifyApp({
   apiKey: process.env.SHOPIFY_API_KEY,
   apiSecretKey: process.env.SHOPIFY_API_SECRET || "",
   apiVersion: ApiVersion.October25,
   scopes: process.env.SCOPES?.split(","),
-  appUrl: process.env.SHOPIFY_APP_URL || "",
+  appUrl,
   authPathPrefix: "/auth",
   sessionStorage: new PrismaSessionStorage(prisma),
   distribution: AppDistribution.AppStore,
