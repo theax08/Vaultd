@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,21 +8,234 @@ datasource db {
 }
 
 model Session {
-  id    String   @id @default(cuid())
-  shop  String   @unique
-  state String
-  isOnline Boolean @default(false)
-  accessToken String?
-  scope String?
-  expires DateTime?
-  userId BigInt?
-  firstName String?
-  lastName String?
-  email String?
-  accountOwner Boolean @default(false)
-  locale String?
-  collaboratorAccount Boolean @default(false)
-  accessScopes String[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                  String    @id @default(cuid())
+  shop                String    @unique
+  state               String
+  isOnline            Boolean   @default(false)
+  accessToken         String?
+  scope               String?
+  expires             DateTime?
+  userId              BigInt?
+  firstName           String?
+  lastName            String?
+  email               String?
+  accountOwner        Boolean   @default(false)
+  locale              String?
+  collaborator        Boolean?  @default(false)
+  emailVerified       Boolean?  @default(false)
+  refreshToken        String?
+  refreshTokenExpires DateTime?
+}
+
+model VaultdAccount {
+  id              String    @id @default(cuid())
+  plan            String    @default("FREE")
+  lastSeenPlan    String    @default("FREE")
+  appearanceColor String    @default("black")
+  email           String?
+  passwordHash    String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  shops      ShopSettings[]
+  resetCodes PasswordResetCode[]
+}
+
+model PasswordResetCode {
+  id              String        @id @default(cuid())
+  code            String
+  vaultdAccountId String
+  account         VaultdAccount @relation(fields: [vaultdAccountId], references: [id])
+  expiresAt       DateTime
+  usedAt          DateTime?
+  createdAt       DateTime      @default(now())
+
+  @@index([vaultdAccountId])
+}
+
+model ShopSettings {
+  id                   String         @id @default(cuid())
+  shopDomain           String         @unique
+  botProtectionEnabled Boolean        @default(false)
+  turnstileSiteKey     String?
+  turnstileSecretKey   String?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+  vaultdAccountId      String?
+  account              VaultdAccount? @relation(fields: [vaultdAccountId], references: [id])
+}
+
+model Drop {
+  id                     String    @id @default(cuid())
+  shopDomain             String
+  name                   String
+  status                 String
+  startTime              DateTime?
+  endTime                DateTime?
+  maxUnits               Int
+  description            String?
+  productIds             String?
+  externalId             String?   @unique
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+  referralEnabled        Boolean   @default(true)
+  finalRevenue           Decimal?
+  finalOrderCount        Int?
+  finalConversionRate    Float?
+  finalAvgCartSize       Float?
+  finalWaitlistTotal     Int?
+  finalBuyersCount       Int?
+  finalInterestRate      Float?
+  finalDealRate          Float?
+  selloutTimeSeconds     Int?
+  baseCurrency           String?   @default("USD")
+  soldOut                Boolean?  @default(false)
+  autoLaunch             Boolean   @default(false)
+  maxWaitlistSize        Int?
+  referralPointsPerShare Int       @default(1)
+  peakVelocity           Float?    @default(0)
+
+  orders          DropOrder[]
+  productStats    DropProductStats[]
+  trafficSources  DropTrafficSource[]
+  events          DropEvent[]
+  histories       DropHistory[]
+  waitlistEntries WaitlistEntry[]
+}
+
+model DropOrder {
+  id               String   @id @default(cuid())
+  shopDomain       String
+  dropId           String
+  drop             Drop     @relation(fields: [dropId], references: [id])
+  shopifyOrderId   String
+  shopifyOrderName String?
+  customerEmail    String?
+  totalAmount      Decimal  @default(0)
+  currencyCode     String   @default("USD")
+  itemCount        Int      @default(0)
+  firstProductName String?
+  createdAt        DateTime @default(now())
+  fromWaitlist     Boolean  @default(false)
+
+  @@unique([dropId, shopifyOrderId])
+}
+
+model DropProductStats {
+  id                 String    @id @default(cuid())
+  shopDomain         String
+  dropId             String
+  drop               Drop      @relation(fields: [dropId], references: [id])
+  productId          String
+  variantId          String?
+  productName        String
+  unitsSold          Int       @default(0)
+  revenue            Decimal   @default(0)
+  selloutTimeSeconds Int?
+  lastSoldAt         DateTime?
+  createdAt          DateTime  @default(now())
+
+  @@index([shopDomain, dropId])
+}
+
+model DropTrafficSource {
+  id         String   @id @default(cuid())
+  shopDomain String
+  dropId     String
+  drop       Drop     @relation(fields: [dropId], references: [id])
+  source     String
+  visitors   Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([dropId, source])
+}
+
+model DropEvent {
+  id         String   @id @default(cuid())
+  shopDomain String
+  dropId     String
+  drop       Drop     @relation(fields: [dropId], references: [id])
+  type       String
+  timestamp  DateTime @default(now())
+  payload    Json?
+}
+
+model DropHistory {
+  id                 String   @id @default(cuid())
+  shopDomain         String
+  dropId             String
+  drop               Drop     @relation(fields: [dropId], references: [id])
+  totalRevenue       Decimal  @default(0)
+  orderCount         Int      @default(0)
+  avgCartSize        Float    @default(0)
+  conversionRate     Float    @default(0)
+  waitlistTotal      Int      @default(0)
+  buyersFromWaitlist Int      @default(0)
+  selloutTimeSeconds Int      @default(0)
+  createdAt          DateTime @default(now())
+}
+
+model WaitlistEntry {
+  id                    String          @id @default(cuid())
+  dropId                String
+  drop                  Drop            @relation(fields: [dropId], references: [id], onDelete: Cascade)
+  email                 String
+  customerName          String?
+  referralCode          String          @unique
+  referredById          String?
+  referredBy            WaitlistEntry?  @relation("Referrals", fields: [referredById], references: [id])
+  referrals             WaitlistEntry[] @relation("Referrals")
+  score                 Int             @default(0)
+  createdAt             DateTime        @default(now())
+  lastPosition          Int?
+  lastPositionUpdatedAt DateTime?
+  unsubscribedAt        DateTime?
+
+  @@unique([dropId, email])
+}
+
+model EmailAutomation {
+  id             String   @id @default(cuid())
+  shopDomain     String
+  dropId         String?
+  dropExternalId String?
+  type           String
+  brandName      String
+  mainColor      String
+  subject        String
+  body           String
+  ctaUrl         String?
+  logoUrl        String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([shopDomain, type])
+}
+
+model SupportTicket {
+  id                  String           @id @default(cuid())
+  shopDomain          String
+  customerEmail       String?
+  plan                String           @default("FREE")
+  status              String           @default("OPEN")
+  title               String
+  hasUnreadOwnerReply Boolean          @default(false)
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  messages            SupportMessage[]
+
+  @@index([shopDomain, updatedAt])
+  @@index([status, plan])
+}
+
+model SupportMessage {
+  id        String        @id @default(cuid())
+  ticketId  String
+  ticket    SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  sender    String
+  body      String
+  createdAt DateTime      @default(now())
+
+  @@index([ticketId, createdAt])
 }
