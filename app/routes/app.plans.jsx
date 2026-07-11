@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useActionData, useLoaderData, useSubmit, useNavigate, useSearchParams, Link } from "react-router";
+import { useActionData, useLoaderData, useSubmit, useSearchParams, Link } from "react-router";
 import { authenticate } from "../shopify.server";
 import { getAccountForShop, createAccountForShop } from "../vaultd-account.server";
 import { PLAN_ORDER, BILLABLE_PLAN_ORDER, PLAN_LABELS, PLAN_PRICES, getPlanFeatureList } from "../vaultd-plans";
@@ -93,7 +93,6 @@ export default function PlansPage() {
   const from = searchParams.get("from") === "settings" ? "settings" : "home";
   const backTo = from === "settings" ? "/app/settings" : "/app";
 
-  const navigate = useNavigate();
   const currentPlan = actionData?.plan ?? account?.plan ?? "FREE";
   const billingResult = searchParams.get("billing");
   const [dismissedCongrats, setDismissedCongrats] = useState(false);
@@ -103,16 +102,6 @@ export default function PlansPage() {
   const showCongrats = Boolean(
     ((actionData?.success && actionData.changed) || billingResult === "confirmed") && !dismissedCongrats
   );
-
-  const handleSwitch = (plan) => {
-    if (plan === "FREE") {
-      submit({ plan }, { method: "post" });
-    } else {
-      // Full page navigation bypasses React Router's .data requests
-      // which don't handle Shopify billing redirects properly.
-      window.location.href = `/app/billing/request?plan=${plan}&shop=${shop}`;
-    }
-  };
 
   return (
     <div style={pagePopStyle}>
@@ -166,14 +155,19 @@ export default function PlansPage() {
                   </li>
                 ))}
               </ul>
-              <button
-                type="button"
-                disabled={isCurrent}
-                onClick={() => handleSwitch(plan)}
-                style={isCurrent ? secondaryButtonStyle : primaryButtonStyle}
-              >
-                {isCurrent ? "Active" : "Switch to this plan"}
-              </button>
+              {isCurrent ? (
+                <button type="button" disabled style={secondaryButtonStyle}>
+                  Active
+                </button>
+              ) : (
+                <a
+                  href={`/app/billing/request?plan=${plan}&shop=${shop}`}
+                  target="_top"
+                  style={{ ...primaryButtonStyle, textDecoration: "none", display: "block", textAlign: "center" }}
+                >
+                  Switch to this plan
+                </a>
+              )}
             </div>
           );
         })}
