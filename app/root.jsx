@@ -13,6 +13,7 @@ export default function App() {
         />
         <Meta />
         <Links />
+        <style>{`body { margin: 0; padding: 0; }`}</style>
       </head>
       <body>
         <Outlet />
