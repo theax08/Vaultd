@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useActionData, useLoaderData, useSubmit, useSearchParams, Link } from "react-router";
+import { useActionData, useLoaderData, useSubmit, useNavigate, useSearchParams, Link } from "react-router";
 import { authenticate } from "../shopify.server";
 import { getAccountForShop, createAccountForShop } from "../vaultd-account.server";
 import { PLAN_ORDER, BILLABLE_PLAN_ORDER, PLAN_LABELS, PLAN_PRICES, getPlanFeatureList } from "../vaultd-plans";
@@ -43,7 +43,7 @@ async function isDevStore(admin) {
 }
 
 export const action = async ({ request }) => {
-  const { admin, session, billing } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
   const shopDomain = session.shop;
   const dbModule = await import("../db.server");
   const db = dbModule.default;
@@ -82,12 +82,7 @@ export const action = async ({ request }) => {
     return { success: true, plan: "FREE", changed: account.plan !== "FREE" };
   }
 
-  const returnUrl = `${(process.env.SHOPIFY_APP_URL || new URL(request.url).origin).replace(/\/$/, "")}/app/billing/return?plan=${nextPlan}`;
-  await billing.request({
-    plan: PLAN_LABELS[nextPlan],
-    isTest,
-    returnUrl,
-  });
+  return { success: false, error: "Use /app/billing/request for paid plans." };
 };
 
 export default function PlansPage() {
@@ -98,6 +93,7 @@ export default function PlansPage() {
   const from = searchParams.get("from") === "settings" ? "settings" : "home";
   const backTo = from === "settings" ? "/app/settings" : "/app";
 
+  const navigate = useNavigate();
   const currentPlan = actionData?.plan ?? account?.plan ?? "FREE";
   const billingResult = searchParams.get("billing");
   const [dismissedCongrats, setDismissedCongrats] = useState(false);
@@ -109,7 +105,11 @@ export default function PlansPage() {
   );
 
   const handleSwitch = (plan) => {
-    submit({ plan }, { method: "post" });
+    if (plan === "FREE") {
+      submit({ plan }, { method: "post" });
+    } else {
+      navigate(`/app/billing/request?plan=${plan}`);
+    }
   };
 
   return (
