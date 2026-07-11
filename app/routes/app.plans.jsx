@@ -20,12 +20,25 @@ import {
 } from "../styles/pop-ui";
 
 export const loader = async ({ request }) => {
-  const { session } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
   let account = null;
   try {
     account = await getAccountForShop(session.shop);
   } catch {}
-  return { account, shop: session.shop };
+
+  // Decode Shopify host param to build direct Shopify Admin URL for billing
+  // (avoids the Railway→re-auth→Shopify Admin round-trip that takes ~16s)
+  let shopifyAdminBase = null;
+  let appHandle = null;
+  try {
+    const rawHost = new URL(request.url).searchParams.get("host");
+    if (rawHost) shopifyAdminBase = Buffer.from(rawHost, "base64url").toString();
+    const res = await admin.graphql(`{ app { handle } }`);
+    const { data } = await res.json();
+    appHandle = data?.app?.handle ?? null;
+  } catch {}
+
+  return { account, shop: session.shop, shopifyAdminBase, appHandle };
 };
 
 // Plans payants : cles plan → label Shopify billing (doit matcher shopify.server.js).
@@ -86,7 +99,14 @@ export const action = async ({ request }) => {
 };
 
 export default function PlansPage() {
-  const { account, shop } = useLoaderData();
+  const { account, shop, shopifyAdminBase, appHandle } = useLoaderData();
+
+  const getBillingHref = (plan) => {
+    if (shopifyAdminBase && appHandle) {
+      return `https://${shopifyAdminBase}/apps/${appHandle}/app/billing/request?plan=${plan}`;
+    }
+    return `/app/billing/request?plan=${plan}&shop=${shop}`;
+  };
   const actionData = useActionData();
   const submit = useSubmit();
   const [searchParams] = useSearchParams();
@@ -161,7 +181,7 @@ export default function PlansPage() {
                 </button>
               ) : (
                 <a
-                  href={`/app/billing/request?plan=${plan}&shop=${shop}`}
+                  href={getBillingHref(plan)}
                   target="_top"
                   style={{ ...primaryButtonStyle, textDecoration: "none", display: "block", textAlign: "center" }}
                 >
