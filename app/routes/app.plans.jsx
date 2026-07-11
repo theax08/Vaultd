@@ -25,7 +25,7 @@ export const loader = async ({ request }) => {
   try {
     account = await getAccountForShop(session.shop);
   } catch {}
-  return { account };
+  return { account, shop: session.shop };
 };
 
 // Plans payants : cles plan → label Shopify billing (doit matcher shopify.server.js).
@@ -86,7 +86,7 @@ export const action = async ({ request }) => {
 };
 
 export default function PlansPage() {
-  const { account } = useLoaderData();
+  const { account, shop } = useLoaderData();
   const actionData = useActionData();
   const submit = useSubmit();
   const [searchParams] = useSearchParams();
@@ -108,7 +108,9 @@ export default function PlansPage() {
     if (plan === "FREE") {
       submit({ plan }, { method: "post" });
     } else {
-      navigate(`/app/billing/request?plan=${plan}`);
+      // Full page navigation bypasses React Router's .data requests
+      // which don't handle Shopify billing redirects properly.
+      window.location.href = `/app/billing/request?plan=${plan}&shop=${shop}`;
     }
   };
 

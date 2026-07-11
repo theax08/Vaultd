@@ -16,7 +16,7 @@ async function isDevStore(admin) {
 }
 
 export const loader = async ({ request }) => {
-  const { admin, billing } = await authenticate.admin(request);
+  const { admin, session, billing } = await authenticate.admin(request);
   const url = new URL(request.url);
   const plan = url.searchParams.get("plan");
 
@@ -25,7 +25,8 @@ export const loader = async ({ request }) => {
   }
 
   const isTest = await isDevStore(admin);
-  const returnUrl = `${(process.env.SHOPIFY_APP_URL || new URL(request.url).origin).replace(/\/$/, "")}/app/billing/return?plan=${plan}`;
+  const baseUrl = (process.env.SHOPIFY_APP_URL || new URL(request.url).origin).replace(/\/$/, "");
+  const returnUrl = `${baseUrl}/app/billing/return?plan=${plan}&shop=${session.shop}`;
 
   try {
     await billing.request({
