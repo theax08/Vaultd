@@ -26,7 +26,8 @@ export const loader = async ({ request }) => {
 
   const isTest = await isDevStore(admin);
   const baseUrl = (process.env.SHOPIFY_APP_URL || new URL(request.url).origin).replace(/\/$/, "");
-  const returnUrl = `${baseUrl}/app/billing/return?plan=${plan}&shop=${session.shop}`;
+  const host = url.searchParams.get("host") || "";
+  const returnUrl = `${baseUrl}/app/billing/return?plan=${plan}&shop=${session.shop}${host ? `&host=${encodeURIComponent(host)}` : ""}`;
 
   try {
     await billing.request({
