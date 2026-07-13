@@ -183,7 +183,7 @@ model WaitlistEntry {
   drop                  Drop            @relation(fields: [dropId], references: [id], onDelete: Cascade)
   email                 String
   customerName          String?
-  referralCode          String          @unique
+  referralCode          String          @default(cuid()) @unique
   referredById          String?
   referredBy            WaitlistEntry?  @relation("Referrals", fields: [referredById], references: [id])
   referrals             WaitlistEntry[] @relation("Referrals")
