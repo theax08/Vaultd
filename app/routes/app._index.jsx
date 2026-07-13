@@ -173,7 +173,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 14, alignItems: "start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 14, alignItems: "stretch" }}>
         {/* Recent drops — spans 3 of 4 columns to align with KPI grid */}
         <div style={{ ...cardPadded, gridColumn: "span 3", display: "flex", flexDirection: "column", maxHeight: 460, overflow: "hidden" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
@@ -223,7 +223,7 @@ export default function Dashboard() {
         </div>
 
         {/* Right column — 1 column, same width as one KPI card */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14, alignSelf: "stretch" }}>
           {!setupComplete && (
             <div style={cardPadded}>
               <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--vaultd-accent, #1a1a1a)", marginBottom: 10 }}>
@@ -288,7 +288,7 @@ export default function Dashboard() {
             )}
           </div>
 
-          <div style={cardPadded}>
+          <div style={{ ...cardPadded, flex: 1 }}>
             <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--vaultd-accent, #1a1a1a)", marginBottom: 10 }}>
               Resources
             </div>
