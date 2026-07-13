@@ -63,9 +63,7 @@ export default function App() {
         {features.includes("automated_emails") && (
           <s-link href="/app/emails">Emails</s-link>
         )}
-        {features.includes("drop_history") && (
-          <s-link href="/app/drops-history">Drops History</s-link>
-        )}
+        <s-link href="/app/drops-history">Drops History</s-link>
         <s-link href="/app/settings">Settings</s-link>
       </s-app-nav>
       <div style={{ "--vaultd-accent": accentColor }}>

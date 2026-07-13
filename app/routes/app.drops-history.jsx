@@ -153,6 +153,8 @@ export const loader = async ({ request }) => {
         ? "SOLD_OUT"
         : drop.status === "LIVE"
         ? "LIVE"
+        : drop.status === "DRAFT"
+        ? "DRAFT"
         : "PARTIAL";
 
     return {
@@ -244,6 +246,7 @@ const STATUS_OPTIONS = [
   { key: "SOLD_OUT", label: "Sold out" },
   { key: "PARTIAL", label: "Partial" },
   { key: "LIVE", label: "Live" },
+  { key: "DRAFT", label: "Draft" },
 ];
 
 const SORT_OPTIONS = [
@@ -932,6 +935,7 @@ export default function DropsHistoryPage() {
           const isSoldOut = drop.status === "SOLD_OUT";
           const isPartial = drop.status === "PARTIAL";
           const isLive = drop.status === "LIVE";
+          const isDraft = drop.status === "DRAFT";
 
           const revenueDeltaPositive =
             drop.revenueDelta &&
@@ -945,15 +949,8 @@ export default function DropsHistoryPage() {
             height: 9,
             borderRadius: "50%",
             flexShrink: 0,
-            background:
-              isLive || isSoldOut || isPartial
-                ? isLive
-                  ? "#4ade80"
-                  : "#9ca3af"
-                : "#9ca3af",
-            boxShadow: isLive
-              ? "0 0 6px rgba(74,222,128,0.6)"
-              : "none",
+            background: isLive ? "#4ade80" : isDraft ? "#d1d5db" : "#9ca3af",
+            boxShadow: isLive ? "0 0 6px rgba(74,222,128,0.6)" : "none",
           };
 
           const cardStyle = {
@@ -1044,6 +1041,21 @@ export default function DropsHistoryPage() {
                       }}
                     >
                       Partial
+                    </div>
+                  )}
+                  {isDraft && (
+                    <div
+                      style={{
+                        background: "#f3f4f6",
+                        color: "#6b7280",
+                        border: "1px solid #e5e7eb",
+                        borderRadius: 20,
+                        padding: "2px 9px",
+                        fontSize: 11.5,
+                        fontWeight: 600,
+                      }}
+                    >
+                      Draft
                     </div>
                   )}
                 </div>

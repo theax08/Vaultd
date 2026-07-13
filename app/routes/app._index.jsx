@@ -173,9 +173,9 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 14, alignItems: "stretch" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 14, alignItems: "start" }}>
         {/* Recent drops — spans 3 of 4 columns to align with KPI grid */}
-        <div style={{ ...cardPadded, gridColumn: "span 3", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <div style={{ ...cardPadded, gridColumn: "span 3", display: "flex", flexDirection: "column", maxHeight: 460, overflow: "hidden" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
             <span style={{ fontSize: 14, fontWeight: 700, color: "var(--vaultd-accent, #1a1a1a)" }}>Recent drops</span>
             <Link to="/app/drops" style={{ fontSize: 13, fontWeight: 600, color: "var(--vaultd-accent, #1a1a1a)" }}>
