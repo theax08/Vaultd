@@ -39,6 +39,7 @@ export function textMatches(text, query) {
 
 export const pagePopStyle = {
   fontFamily: popFontFamily,
+  padding: "20px 20px 32px",
 };
 
 export const pageHeaderRowStyle = {

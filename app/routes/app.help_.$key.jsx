@@ -17,7 +17,7 @@ import {
 export const loader = async ({ request, params }) => {
   const { session } = await authenticate.admin(request);
   const account = await getAccountForShop(session.shop);
-  const plan = account?.plan ?? "FREE";
+  const plan = account?.plan ?? null;
 
   const section = getSection(params.key);
   if (!section) {

@@ -31,14 +31,14 @@ export const loader = async ({ request }) => {
 
   const tickets = await listTicketsForShop(shopDomain);
 
-  return { tickets, plan: account?.plan ?? "FREE" };
+  return { tickets, plan: account?.plan ?? null };
 };
 
 export const action = async ({ request }) => {
   const { session } = await authenticate.admin(request);
   const shopDomain = session.shop;
   const account = await getAccountForShop(shopDomain);
-  const plan = account?.plan ?? "FREE";
+  const plan = account?.plan ?? null;
   const customerEmail = account?.email || session.email || null;
 
   const formData = await request.formData();

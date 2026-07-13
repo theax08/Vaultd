@@ -99,7 +99,7 @@ export const loader = async ({ request }) => {
     { done: endedDrops.length > 0, label: "Complete your first drop", to: "/app/drops-history" },
   ];
 
-  const plan = account?.plan ?? "FREE";
+  const plan = account?.plan ?? null;
 
   return {
     stats: {
@@ -111,7 +111,7 @@ export const loader = async ({ request }) => {
     steps,
     recentDrops,
     plan,
-    features: PLAN_FEATURES[plan] ?? PLAN_FEATURES.FREE,
+    features: PLAN_FEATURES[plan] ?? [],
     hasNewFeatures: account ? account.lastSeenPlan !== account.plan : false,
   };
 };
@@ -173,9 +173,9 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 14, alignItems: "stretch" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 14 }}>
         {/* Recent drops — spans 3 of 4 columns to align with KPI grid */}
-        <div style={{ ...cardPadded, gridColumn: "span 3", display: "flex", flexDirection: "column", maxHeight: 460, overflow: "hidden" }}>
+        <div style={{ ...cardPadded, gridColumn: "span 3", display: "flex", flexDirection: "column", overflow: "hidden" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
             <span style={{ fontSize: 14, fontWeight: 700, color: "var(--vaultd-accent, #1a1a1a)" }}>Recent drops</span>
             <Link to="/app/drops" style={{ fontSize: 13, fontWeight: 600, color: "var(--vaultd-accent, #1a1a1a)" }}>
@@ -223,7 +223,7 @@ export default function Dashboard() {
         </div>
 
         {/* Right column — 1 column, same width as one KPI card */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 14, alignSelf: "stretch" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14, overflow: "hidden" }}>
           {!setupComplete && (
             <div style={cardPadded}>
               <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--vaultd-accent, #1a1a1a)", marginBottom: 10 }}>
@@ -270,22 +270,10 @@ export default function Dashboard() {
             <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--vaultd-accent, #1a1a1a)", marginBottom: 6 }}>
               Your plan
             </div>
-            {plan === "FREE" ? (
-              <>
-                <p style={{ fontSize: 13, color: "#6d7175", margin: "0 0 10px 0" }}>No active subscription</p>
-                <Link to="/app/plans" style={{ fontSize: 13, fontWeight: 600, color: "var(--vaultd-accent, #1a1a1a)" }}>
-                  Choose a plan →
-                </Link>
-              </>
-            ) : (
-              <>
-                <p style={{ fontSize: 13, color: "#303030", margin: "0 0 2px 0" }}>{planSummary.label}</p>
-                <p style={{ fontSize: 11.5, color: "#919191", margin: "0 0 10px 0" }}>{planSummary.quota}</p>
-                <Link to="/app/plans?from=home" style={{ fontSize: 13, fontWeight: 600, color: "var(--vaultd-accent, #1a1a1a)" }}>
-                  View all plans →
-                </Link>
-              </>
-            )}
+            <p style={{ fontSize: 13, color: "#303030", margin: "0 0 10px 0" }}>{planSummary?.label}</p>
+            <Link to="/app/plans?from=home" style={{ fontSize: 13, fontWeight: 600, color: "var(--vaultd-accent, #1a1a1a)" }}>
+              View all plans →
+            </Link>
           </div>
 
           <div style={{ ...cardPadded, flex: 1 }}>

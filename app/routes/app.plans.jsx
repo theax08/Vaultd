@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useActionData, useLoaderData, useSubmit, useSearchParams, Link } from "react-router";
 import { authenticate } from "../shopify.server";
 import { getAccountForShop, createAccountForShop } from "../vaultd-account.server";
-import { PLAN_ORDER, BILLABLE_PLAN_ORDER, PLAN_LABELS, PLAN_PRICES, getPlanFeatureList } from "../vaultd-plans";
+import { PLAN_ORDER, PLAN_LABELS, PLAN_PRICES, getPlanFeatureList } from "../vaultd-plans";
 import {
   pagePopStyle,
   pageHeaderRowStyle,
@@ -41,9 +41,6 @@ export const loader = async ({ request }) => {
   return { account, shop: session.shop, shopifyAdminBase, appHandle };
 };
 
-// Plans payants : cles plan → label Shopify billing (doit matcher shopify.server.js).
-const PAID_PLAN_KEYS = PLAN_ORDER.filter((p) => p !== "FREE");
-
 async function isDevStore(admin) {
   try {
     const res = await admin.graphql(`{ shop { plan { partnerDevelopment } } }`);
@@ -62,37 +59,10 @@ export const action = async ({ request }) => {
   const db = dbModule.default;
 
   const formData = await request.formData();
-  const nextPlan = (formData.get("plan") || "FREE").toString();
+  const nextPlan = (formData.get("plan") || "").toString();
 
   if (!PLAN_ORDER.includes(nextPlan)) {
-    return { success: false, error: "Invalid plan." };
-  }
-
-  let account = await getAccountForShop(shopDomain);
-  if (!account) {
-    const result = await createAccountForShop(shopDomain);
-    if (result.error) return { success: false, error: result.error };
-    account = result.account;
-  }
-
-  const isTest = await isDevStore(admin);
-
-  if (nextPlan === "FREE") {
-    try {
-      const check = await billing.check({
-        plans: PAID_PLAN_KEYS.map((k) => PLAN_LABELS[k]),
-        isTest,
-      });
-      if (check.appSubscriptions?.length > 0) {
-        await billing.cancel({
-          subscriptionId: check.appSubscriptions[0].id,
-          isTest,
-          prorate: false,
-        });
-      }
-    } catch (_) {}
-    await db.vaultdAccount.update({ where: { id: account.id }, data: { plan: "FREE" } });
-    return { success: true, plan: "FREE", changed: account.plan !== "FREE" };
+    return { success: false, error: "Invalid plan. Use the billing flow to switch plans." };
   }
 
   return { success: false, error: "Use /app/billing/request for paid plans." };
@@ -113,14 +83,19 @@ export default function PlansPage() {
   const from = searchParams.get("from") === "settings" ? "settings" : "home";
   const backTo = from === "settings" ? "/app/settings" : "/app";
 
-  const currentPlan = actionData?.plan ?? account?.plan ?? "FREE";
   const billingResult = searchParams.get("billing");
+  // Quand billing=confirmed, le plan vient du parametre URL (plus fiable que
+  // lire la DB juste apres le redirect — evite l'affichage "No subscription").
+  const billingPlan = billingResult === "confirmed" ? searchParams.get("plan") : null;
+  const currentPlan = actionData?.plan ?? billingPlan ?? account?.plan ?? null;
   const [dismissedCongrats, setDismissedCongrats] = useState(false);
   useEffect(() => {
     setDismissedCongrats(false);
   }, [actionData, billingResult]);
   const showCongrats = Boolean(
-    ((actionData?.success && actionData.changed) || billingResult === "confirmed") && !dismissedCongrats
+    ((actionData?.success && actionData.changed) || billingResult === "confirmed") &&
+    PLAN_ORDER.includes(currentPlan) &&
+    !dismissedCongrats
   );
 
   return (
@@ -142,8 +117,14 @@ export default function PlansPage() {
         </div>
       )}
 
+      {!currentPlan && (
+        <div style={{ marginBottom: 16, padding: "12px 16px", background: "#fff3cd", borderRadius: 8, border: "1px solid #ffc107", fontSize: 13.5, color: "#303030" }}>
+          <strong>No active plan.</strong> Select a plan below to access Vaultd.
+        </div>
+      )}
+
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 14 }}>
-        {BILLABLE_PLAN_ORDER.map((plan) => {
+        {PLAN_ORDER.map((plan) => {
           const isCurrent = plan === currentPlan;
           const featureList = getPlanFeatureList(plan);
           return (

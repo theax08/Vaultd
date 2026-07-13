@@ -15,20 +15,22 @@ export const loader = async ({ request }) => {
       ? `https://admin.shopify.com/store/${shopHandle}/apps/${process.env.SHOPIFY_APP_HANDLE || "vaultd"}/app/${path}`
       : `/app/${path}`;
 
-  if (!plan || !PLAN_ORDER.includes(plan) || plan === "FREE" || !shop) {
+  if (!plan || !PLAN_ORDER.includes(plan) || !shop) {
     return redirect(toAdmin("plans"));
   }
 
   const dbModule = await import("../db.server");
   const db = dbModule.default;
 
-  // Fetch app handle for proper redirect URL (best-effort, fall back to /app/)
+  // Fetch app handle + merchant email for proper redirect URL and account sync
   let appHandle = process.env.SHOPIFY_APP_HANDLE || null;
+  let merchantEmail = null;
   try {
     const { admin: adminAuth } = await unauthenticated.admin(shop);
-    const appRes = await adminAuth.graphql(`{ app { handle } }`);
+    const appRes = await adminAuth.graphql(`{ app { handle } shop { email } }`);
     const { data: appData } = await appRes.json();
     if (appData?.app?.handle) appHandle = appData.app.handle;
+    if (appData?.shop?.email) merchantEmail = appData.shop.email.toLowerCase().trim();
   } catch {}
 
   const toAdminWithHandle = (path = "") =>
@@ -62,7 +64,9 @@ export const loader = async ({ request }) => {
     try {
       let account = await getAccountForShop(shop);
       if (!account) {
-        const result = await createAccountForShop(shop);
+        // If a VaultdAccount with the merchant's email exists (created on website),
+        // link this shop to it instead of creating a new separate account.
+        const result = await createAccountForShop(shop, { email: merchantEmail || undefined });
         account = result.account;
       }
       if (account) {
@@ -72,7 +76,7 @@ export const loader = async ({ request }) => {
         });
       }
     } catch (_) {}
-    return redirect(toAdminWithHandle("plans?billing=confirmed"));
+    return redirect(toAdminWithHandle(`plans?billing=confirmed&plan=${plan}`));
   }
 
   return redirect(toAdminWithHandle("plans?billing=cancelled"));

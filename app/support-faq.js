@@ -68,6 +68,11 @@ export const SUPPORT_CATEGORIES = [
         answer:
           "When creating or editing a drop, set a start date and time and toggle on \"Auto-launch\". Vaultd will switch the drop to LIVE at that exact time. Auto-launch requires the Scale plan or above.",
       },
+      {
+        question: "Does Vaultd stop sales once my unit limit is reached?",
+        answer:
+          "No. Vaultd tracks sales and records the sold-out moment, but it does not modify your Shopify inventory. Your store can still accept new orders after the unit limit is hit. If you need to prevent additional purchases, go to your Shopify admin and set the relevant product variants to \"out of stock\", or configure Shopify's inventory policy to cap the available quantity. Vaultd will close the drop and record the correct analytics based on orders received up to that point.",
+      },
     ],
   },
   {
@@ -83,6 +88,11 @@ export const SUPPORT_CATEGORIES = [
         question: "How does the comparison with the previous drop work?",
         answer:
           "Drop History compares each metric (revenue, conversion rate, avg cart size) against your most recent ended drop. A green arrow means improvement, red means decline. If this is your first ended drop, comparisons show \"N/A\" — they'll appear automatically once you have a second drop to compare against.",
+      },
+      {
+        question: "Why are my traffic source numbers low or showing 'other'?",
+        answer:
+          "Traffic sources (Instagram, TikTok, Vaultd Emails, etc.) are tracked by the Vaultd waitlist widget embedded on your storefront page. Each time a visitor loads the page, the widget reads the ?vaultd_src= URL parameter and records the source. If the widget isn't on the page, or the visitor arrives without that parameter (typed the URL directly, clicked an untracked link), the visit isn't attributed. Vaultd email links are tagged automatically when sent. For social media, add ?vaultd_src=instagram or ?vaultd_src=tiktok to every link you share — for example, your Instagram story link or TikTok bio URL.",
       },
       {
         question: "How is the conversion rate calculated?",
@@ -108,7 +118,7 @@ export const SUPPORT_CATEGORIES = [
       {
         question: "How do I upgrade or downgrade my plan?",
         answer:
-          "Go to Plans, find the plan you want, and click \"Switch to this plan\". For paid plans, Shopify will ask you to confirm the subscription. For a downgrade to Free, your current subscription is cancelled immediately with no further charges.",
+          "Go to Plans, find the plan you want, and click \"Switch to this plan\". Shopify will ask you to confirm the new subscription. All Vaultd plans are paid — there is no free tier.",
       },
       {
         question: "Will I be charged immediately when I upgrade?",
@@ -135,6 +145,37 @@ export const SUPPORT_CATEGORIES = [
         question: "How do I add the widget to my product page?",
         answer:
           "In your Shopify admin, go to Online Store → Themes → Customize. In the Vaultd section (under Apps), drag the Hype Widget block onto your product page template and save. The widget will appear automatically when a drop is active for that product.",
+      },
+    ],
+  },
+  {
+    key: "account",
+    label: "Account & cancellation",
+    questions: [
+      {
+        question: "How do I cancel my Vaultd subscription?",
+        answer:
+          "To cancel, go to Settings → Account in the Vaultd app and click \"Cancel subscription / Delete account\" — this opens your account portal at vaultd.pro. You can cancel your subscription there. You can also cancel directly from your Shopify admin: Apps → Manage apps → Vaultd → Cancel plan.",
+      },
+      {
+        question: "How do I delete my Vaultd account?",
+        answer:
+          "Go to Settings → Account and click \"Cancel subscription / Delete account\" to open the account portal at vaultd.pro. From there, click \"Delete account\" and confirm. This permanently removes all your Vaultd data. Important: deleting your account does NOT cancel your Shopify subscription — you must cancel that separately from your Shopify admin to stop being charged.",
+      },
+      {
+        question: "Will I receive a confirmation email when I delete my account?",
+        answer:
+          "Yes. A confirmation email is sent to the address on your Vaultd account when it is deleted. You also receive a welcome email when your account is first created.",
+      },
+      {
+        question: "How do I reset my Vaultd account password?",
+        answer:
+          "Visit vaultd.pro/forgot-password, enter your account email, and we'll send you a 6-digit reset code. Enter the code and your new password to complete the reset. You can also use the \"Forgot password?\" link on the login page.",
+      },
+      {
+        question: "My Shopify store and website account aren't synced — why?",
+        answer:
+          "Accounts sync automatically when the email on your Shopify store matches your Vaultd website account email. If they're different, the two accounts stay separate. You can link additional stores to one account from Settings → Account (Elite plan) using your Account ID.",
       },
     ],
   },

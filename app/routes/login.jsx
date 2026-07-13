@@ -1,5 +1,5 @@
 import { redirect } from "react-router";
-import { Form, Link, useActionData } from "react-router";
+import { Form, Link, useActionData, useSearchParams } from "react-router";
 import bcrypt from "bcryptjs";
 import { getWebSession, commitWebSession, getWebAccountOptional } from "../auth.web.server";
 
@@ -19,13 +19,31 @@ export const action = async ({ request }) => {
   }
 
   const { default: db } = await import("../db.server");
-  const account = await db.vaultdAccount.findFirst({ where: { email } });
+  const account = await db.vaultdAccount.findFirst({
+    where: { email: { equals: email, mode: "insensitive" } },
+  });
 
   if (!account || !account.passwordHash) {
     return { error: "Invalid email or password." };
   }
 
-  const valid = await bcrypt.compare(password, account.passwordHash);
+  let valid = false;
+  try {
+    if (account.passwordHash.startsWith("$2")) {
+      valid = await bcrypt.compare(password, account.passwordHash);
+    } else {
+      // Legacy scrypt format
+      const crypto = await import("node:crypto");
+      const [salt, hash] = account.passwordHash.split(":");
+      if (salt && hash) {
+        const candidate = crypto.default.scryptSync(password, salt, 64).toString("hex");
+        valid = crypto.default.timingSafeEqual(Buffer.from(candidate, "hex"), Buffer.from(hash, "hex"));
+      }
+    }
+  } catch {
+    return { error: "Invalid email or password." };
+  }
+
   if (!valid) {
     return { error: "Invalid email or password." };
   }
@@ -40,10 +58,12 @@ export const action = async ({ request }) => {
 
 export default function LoginPage() {
   const actionData = useActionData();
+  const [searchParams] = useSearchParams();
+  const resetSuccess = searchParams.get("reset") === "1";
 
   return (
     <div style={rootStyle}>
-      <header style={{ position: "fixed", top: 0, left: 0, right: 0, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 32px" }}>
+      <header style={headerStyle}>
         <Link to="/" style={logoStyle}>Vaultd</Link>
         <Link to="/signup" style={headerBtnStyle}>Create account</Link>
       </header>
@@ -54,6 +74,10 @@ export default function LoginPage() {
           No account?{" "}
           <Link to="/signup" style={linkStyle}>Sign up</Link>
         </p>
+
+        {resetSuccess && (
+          <div style={successStyle}>Password reset successfully. You can log in now.</div>
+        )}
 
         {actionData?.error && (
           <div style={errorStyle}>{actionData.error}</div>
@@ -78,6 +102,10 @@ export default function LoginPage() {
           />
           <button type="submit" style={btnStyle}>Log in</button>
         </Form>
+
+        <div style={{ marginTop: 14, textAlign: "center" }}>
+          <Link to="/forgot-password" style={forgotStyle}>Forgot password?</Link>
+        </div>
       </div>
     </div>
   );
@@ -92,6 +120,16 @@ const rootStyle = {
   alignItems: "center",
   justifyContent: "center",
   padding: "24px",
+};
+const headerStyle = {
+  position: "fixed",
+  top: 0,
+  left: 0,
+  right: 0,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  padding: "16px 32px",
 };
 const logoStyle = {
   fontSize: 18,
@@ -113,6 +151,15 @@ const boxStyle = { width: "100%", maxWidth: 360 };
 const titleStyle = { color: "#f0f0f0", fontSize: 26, fontWeight: 800, margin: "0 0 6px", letterSpacing: "-0.5px" };
 const subtitleStyle = { color: "#606060", fontSize: 14, margin: "0 0 28px" };
 const linkStyle = { color: "#c0c0c0", textDecoration: "none", fontWeight: 600 };
+const successStyle = {
+  background: "#0a1f0a",
+  border: "1px solid #1a4a1a",
+  color: "#4ade80",
+  borderRadius: 8,
+  padding: "11px 14px",
+  marginBottom: 18,
+  fontSize: 13.5,
+};
 const errorStyle = {
   background: "#1a0808",
   border: "1px solid #3a1515",
@@ -144,4 +191,9 @@ const btnStyle = {
   fontWeight: 700,
   cursor: "pointer",
   marginTop: 18,
+};
+const forgotStyle = {
+  fontSize: 13,
+  color: "#505050",
+  textDecoration: "none",
 };

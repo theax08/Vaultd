@@ -5,7 +5,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
 import { authenticate } from "../shopify.server";
 import { getAccountForShop } from "../vaultd-account.server";
-import { COLOR_OPTIONS, PLAN_FEATURES } from "../vaultd-plans";
+import { COLOR_OPTIONS, PLAN_FEATURES, PLAN_ORDER } from "../vaultd-plans";
 import { hasUnreadOwnerReplies } from "../support.server";
 import { GLOBAL_POP_CSS } from "../styles/pop-ui";
 
@@ -26,8 +26,18 @@ export const loader = async ({ request }) => {
     hasSupportUnread = await hasUnreadOwnerReplies(session.shop);
   } catch {}
 
-  const plan = account?.plan ?? "FREE";
-  const features = PLAN_FEATURES[plan] ?? PLAN_FEATURES.FREE;
+  const plan = account?.plan ?? null;
+  const hasPlan = PLAN_ORDER.includes(plan);
+
+  // Gate : toute route /app/* autre que /plans et /billing/* nécessite un plan actif.
+  const url = new URL(request.url);
+  const exempt = url.pathname.startsWith("/app/plans") || url.pathname.startsWith("/app/billing");
+  if (!hasPlan && !exempt) {
+    const { redirect: redir } = await import("react-router");
+    return redir("/app/plans?from=gate");
+  }
+
+  const features = PLAN_FEATURES[plan] ?? [];
 
   return {
     apiKey: process.env.SHOPIFY_API_KEY || "",
@@ -35,7 +45,7 @@ export const loader = async ({ request }) => {
     hasNewFeatures: account ? account.lastSeenPlan !== account.plan : false,
     features,
     hasSupportUnread,
-    needsOnboarding: !account,
+    needsOnboarding: !account && hasPlan,
   };
 };
 

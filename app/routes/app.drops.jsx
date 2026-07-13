@@ -53,7 +53,7 @@ export const loader = async ({ request }) => {
   await runAutoDropLifecycle(shopDomain);
 
   const account = await getAccountForShop(shopDomain);
-  const plan = account?.plan ?? "FREE";
+  const plan = account?.plan ?? "GROWTH";
   const limits = PLAN_LIMITS[plan];
 
   const startOfMonth = new Date();
@@ -220,7 +220,7 @@ export const action = async ({ request }) => {
     let maxUnits = await computeTotalInventory(admin, productIds);
 
     const account = await getAccountForShop(shopDomain);
-    const plan = account?.plan ?? "FREE";
+    const plan = account?.plan ?? "GROWTH";
     const limits = PLAN_LIMITS[plan];
 
     // Le plafond d'unites par drop est une limite du forfait, pas du stock
@@ -433,7 +433,7 @@ function buildDropExternalId(shopDomain, index) {
 // CLIENT: UI Component
 // ==========================================
 export default function DropsPage() {
-  const { drops, shopDomain, dropsLeftThisMonth, canSetWaitlistLimit, canAutoLaunch } = useLoaderData();
+  const { drops, shopDomain, dropsLeftThisMonth, canSetWaitlistLimit, canAutoLaunch, maxUnitsPerDrop } = useLoaderData();
   const actionData = useActionData();
   const submit = useSubmit();
   const revalidator = useRevalidator();
@@ -1223,6 +1223,12 @@ export default function DropsPage() {
                           ))}
                         </ul>
                       </div>
+                    )}
+                    {maxUnitsPerDrop != null && (
+                      <p style={{ fontSize: 12, color: "#c2410c", margin: "8px 0 0 0" }}>
+                        Your plan limits this drop to <strong>{maxUnitsPerDrop} units</strong>. The unit count is automatically computed from your selected products' Shopify inventory and capped at {maxUnitsPerDrop}.{" "}
+                        <a href="/app/plans" style={{ color: "#1a1a1a", fontWeight: 600 }}>Upgrade to raise this limit →</a>
+                      </p>
                     )}
                   </div>
 

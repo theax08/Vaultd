@@ -20,7 +20,7 @@ export const loader = async ({ request }) => {
   const url = new URL(request.url);
   const plan = url.searchParams.get("plan");
 
-  if (!plan || !PLAN_ORDER.includes(plan) || plan === "FREE") {
+  if (!plan || !PLAN_ORDER.includes(plan)) {
     return redirect("/app/plans");
   }
 

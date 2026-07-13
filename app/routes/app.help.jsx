@@ -23,7 +23,7 @@ export const loader = async ({ request }) => {
   const account = await getAccountForShop(session.shop);
 
   if (!account) {
-    return { plan: "FREE", newlyUnlocked: [] };
+    return { plan: null, newlyUnlocked: [] };
   }
 
   const newlyUnlocked = getNewlyUnlockedFeatures(account);

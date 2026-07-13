@@ -3,12 +3,11 @@
 // .server est retire du bundle client par React Router, ce qui casse les
 // imports utilises directement dans le JSX d'une route).
 
-export const PLAN_ORDER = ["FREE", "GROWTH", "PRO", "SCALE", "ELITE"];
-// Plans visibles dans l'UI (pas de plan gratuit — l'essai est géré par Shopify)
-export const BILLABLE_PLAN_ORDER = ["GROWTH", "PRO", "SCALE", "ELITE"];
+// Tous les plans sont payants — pas de plan gratuit.
+// L'app est completement verrouillée sans abonnement actif.
+export const PLAN_ORDER = ["GROWTH", "PRO", "SCALE", "ELITE"];
 
 export const PLAN_LABELS = {
-  FREE: "No subscription",
   GROWTH: "Vaultd Growth",
   PRO: "Vaultd Pro",
   SCALE: "Vaultd Scale",
@@ -16,17 +15,14 @@ export const PLAN_LABELS = {
 };
 
 export const PLAN_PRICES = {
-  FREE: "$0/month",
   GROWTH: "$49/month",
   PRO: "$149/month",
   SCALE: "$299/month",
   ELITE: "$499/month",
 };
 
-// Limites reelles appliquees par plan. maxDropsPerMonth/maxUnitsPerDrop a
-// `null` signifie illimite.
+// Limites reelles appliquees par plan. null = illimite.
 export const PLAN_LIMITS = {
-  FREE: { maxDropsPerMonth: 1, maxUnitsPerDrop: 100 },
   GROWTH: { maxDropsPerMonth: 3, maxUnitsPerDrop: 200 },
   PRO: { maxDropsPerMonth: 10, maxUnitsPerDrop: 500 },
   SCALE: { maxDropsPerMonth: null, maxUnitsPerDrop: 1500 },
@@ -34,13 +30,10 @@ export const PLAN_LIMITS = {
 };
 
 // Fonctionnalites debloquees a chaque palier, cumulatif (un plan herite de
-// toutes les cles des paliers inferieurs). "unlimited_drops" est garde comme
-// cle de feature gating (cf. PLAN_FEATURES) mais n'est pas affiche comme
-// ligne de texte a part, puisque PLAN_LIMITS.maxDropsPerMonth le couvre deja.
+// toutes les cles des paliers inferieurs).
 const PLAN_FEATURE_ADDITIONS = {
-  FREE: ["waitlist"],
-  GROWTH: ["waitlist_limit", "drop_history", "hype_widgets", "color_blue"],
-  PRO: ["automated_emails", "color_red"],
+  GROWTH: ["waitlist", "waitlist_limit", "drop_history", "hype_widgets"],
+  PRO: ["automated_emails", "color_blue", "color_red"],
   SCALE: ["automatic_launch", "unlimited_drops", "color_violet"],
   ELITE: ["bot_protection", "multi_store", "priority_support", "color_gold"],
 };
@@ -81,11 +74,9 @@ function unitsLine(plan) {
   return n == null ? "Unlimited units per drop" : `Up to ${n} units/drop`;
 }
 
-// Liste complete (cumulative) des lignes a afficher pour un plan donne, dans
-// l'ordre : fonctionnalites debloquees puis quotas drops/units. Utilise par
-// la page /app/plans et par le message de bienvenue apres changement de plan.
+// Liste complete (cumulative) des lignes a afficher pour un plan donne.
 export function getPlanFeatureList(plan) {
-  const allKeys = PLAN_FEATURES[plan].filter((key) => key !== "unlimited_drops");
+  const allKeys = (PLAN_FEATURES[plan] ?? []).filter((key) => key !== "unlimited_drops");
   const colorKeys = allKeys.filter((key) => key.startsWith("color_"));
   const featureKeys = allKeys.filter((key) => !key.startsWith("color_"));
   const labels = [...featureKeys, ...colorKeys].map((key) => FEATURE_LABELS[key]);
@@ -102,10 +93,10 @@ export const PLAN_SUMMARIES = PLAN_ORDER.reduce((acc, plan) => {
 }, {});
 
 // Apparence : chaque plan debloque sa couleur ET conserve celles des paliers
-// inferieurs (gating cumulatif, comme les fonctionnalites).
+// inferieurs (gating cumulatif). Noir disponible sur tous les plans payants.
 export const COLOR_OPTIONS = [
-  { key: "black", hex: "#1a1a1a", minPlan: "FREE" },
-  { key: "blue", hex: "#3b82f6", minPlan: "GROWTH" },
+  { key: "black", hex: "#1a1a1a", minPlan: "GROWTH" },
+  { key: "blue", hex: "#3b82f6", minPlan: "PRO" },
   { key: "red", hex: "#dc2626", minPlan: "PRO" },
   { key: "violet", hex: "#7c3aed", minPlan: "SCALE" },
   { key: "gold", hex: "#ca8a04", minPlan: "ELITE" },
@@ -118,7 +109,7 @@ export function canUseColor(plan, color) {
 }
 
 export function getNewlyUnlockedFeatures(account) {
-  const seen = new Set(PLAN_FEATURES[account.lastSeenPlan] ?? PLAN_FEATURES.FREE);
-  const current = PLAN_FEATURES[account.plan] ?? PLAN_FEATURES.FREE;
+  const seen = new Set(PLAN_FEATURES[account.lastSeenPlan] ?? []);
+  const current = PLAN_FEATURES[account.plan] ?? [];
   return current.filter((key) => !seen.has(key));
 }

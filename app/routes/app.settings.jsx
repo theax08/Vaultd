@@ -8,7 +8,7 @@ import {
   requestPasswordReset,
   resetPasswordWithCode,
 } from "../vaultd-account.server";
-import { canUseColor, PLAN_SUMMARIES, COLOR_OPTIONS, PLAN_ORDER, BILLABLE_PLAN_ORDER, PLAN_LABELS, PLAN_PRICES, getPlanFeatureList } from "../vaultd-plans";
+import { canUseColor, PLAN_SUMMARIES, COLOR_OPTIONS, PLAN_ORDER, PLAN_LABELS } from "../vaultd-plans";
 import {
   pagePopStyle,
   pageHeaderRowStyle,
@@ -33,7 +33,6 @@ import {
 
 const SECTIONS = [
   { key: "account", label: "Account" },
-  { key: "plans", label: "Plans" },
   { key: "appearance", label: "Appearance" },
   { key: "bot_protection", label: "Bot protection" },
 ];
@@ -47,7 +46,6 @@ const COLOR_DISPLAY_LABELS = {
 };
 
 const SHORT_PLAN_LABEL = {
-  FREE: "Free",
   GROWTH: "Growth",
   PRO: "Pro",
   SCALE: "Scale",
@@ -122,39 +120,10 @@ export const action = async ({ request }) => {
   }
 
   if (intent === "switch_plan") {
-    const nextPlan = (formData.get("plan") || "FREE").toString();
+    const nextPlan = (formData.get("plan") || "").toString();
     if (!PLAN_ORDER.includes(nextPlan)) return { intent, error: "Invalid plan." };
 
-    let account = await getAccountForShop(shopDomain);
-    if (!account) {
-      const result = await createAccountForShop(shopDomain);
-      if (result.error) return { intent, error: result.error };
-      account = result.account;
-    }
-
-    const paidKeys = PLAN_ORDER.filter((p) => p !== "FREE");
-
-    if (nextPlan === "FREE") {
-      try {
-        const check = await billing.check({
-          plans: paidKeys.map((k) => PLAN_LABELS[k]),
-          isTest: process.env.NODE_ENV !== "production",
-        });
-        if (check.appSubscriptions?.length > 0) {
-          await billing.cancel({
-            subscriptionId: check.appSubscriptions[0].id,
-            isTest: process.env.NODE_ENV !== "production",
-            prorate: false,
-          });
-        }
-      } catch (_) {
-        // Pas d'abonnement actif.
-      }
-      await db.vaultdAccount.update({ where: { id: account.id }, data: { plan: "FREE" } });
-      return { intent, success: true, plan: "FREE", changed: account.plan !== "FREE" };
-    }
-
-    // Plan payant → billing.request redirige vers Shopify (ne retourne jamais).
+    // Tous les plans sont payants — billing.request redirige vers Shopify.
     const returnUrl = `${process.env.SHOPIFY_APP_URL}/app/billing/return?plan=${nextPlan}`;
     await billing.request({
       plan: PLAN_LABELS[nextPlan],
@@ -215,15 +184,6 @@ export default function SettingsPage() {
   const [resetCode, setResetCode] = useState("");
   const [resetNewPassword, setResetNewPassword] = useState("");
   const [resetCodeSent, setResetCodeSent] = useState(false);
-  const [dismissedCongrats, setDismissedCongrats] = useState(false);
-
-  const currentPlan = actionData?.intent === "switch_plan" && actionData?.plan
-    ? actionData.plan
-    : account?.plan ?? "FREE";
-  const showCongrats = Boolean(
-    actionData?.intent === "switch_plan" && actionData?.success && actionData?.changed && !dismissedCongrats
-  );
-
   useEffect(() => {
     if (actionData?.intent === "update_bot_protection" && actionData?.success) {
       setIsSavingBotProt(false);
@@ -241,9 +201,6 @@ export default function SettingsPage() {
       setResetEmail("");
       setResetCode("");
       setResetNewPassword("");
-    }
-    if (actionData?.intent === "switch_plan") {
-      setDismissedCongrats(false);
     }
   }, [actionData]);
 
@@ -285,7 +242,7 @@ export default function SettingsPage() {
     submit(fd, { method: "post" });
   };
 
-  const plan = account?.plan ?? "FREE";
+  const plan = account?.plan ?? null;
   const isElite = plan === "ELITE";
 
   return (
@@ -342,7 +299,7 @@ export default function SettingsPage() {
         </div>
 
         {/* Content */}
-        <div style={{ flex: 1, padding: 20, maxWidth: activeSection === "plans" ? "none" : 640 }}>
+        <div style={{ flex: 1, padding: 20, maxWidth: 640 }}>
       {activeSection === "account" && (
         <>
         <div style={cardLabel}>ACCOUNT</div>
@@ -510,55 +467,33 @@ export default function SettingsPage() {
                 your password.
               </p>
             )}
-          </>
-        )}
-        </>
-      )}
 
-      {activeSection === "plans" && (
-        <>
-        <div style={cardLabel}>PLANS</div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 10, marginBottom: 12 }}>
-          {BILLABLE_PLAN_ORDER.map((p) => {
-            const isCurrent = p === currentPlan;
-            const featureList = getPlanFeatureList(p);
-            return (
-              <div
-                key={p}
+            <div style={{ marginTop: 18, paddingTop: 16, borderTop: "1px solid #e3e3e3" }}>
+              <div style={cardLabel}>MANAGE ACCOUNT</div>
+              <p style={{ fontSize: 13, color: "#6d7175", margin: "6px 0 10px 0" }}>
+                To cancel your subscription or delete your Vaultd account, visit the account portal on our website.
+              </p>
+              <a
+                href={`${process.env.SHOPIFY_APP_URL ?? "https://vaultd.pro"}/account`}
+                target="_blank"
+                rel="noreferrer"
                 style={{
-                  ...cardPadded,
-                  border: isCurrent ? "2px solid var(--vaultd-accent, #1a1a1a)" : "1px solid #e3e3e3",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 8,
-                  padding: 14,
+                  display: "inline-block",
+                  background: "transparent",
+                  border: "1px solid #d82c2c",
+                  color: "#d82c2c",
+                  borderRadius: 7,
+                  padding: "8px 14px",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  textDecoration: "none",
                 }}
               >
-                <div style={{ minHeight: 20 }}>
-                  {isCurrent && <span style={pillBadge("success")}>Current</span>}
-                </div>
-                <div style={{ fontSize: 13.5, fontWeight: 700, color: "#1a1a1a" }}>{PLAN_LABELS[p]}</div>
-                <div style={{ fontSize: 17, fontWeight: 700, color: "#1a1a1a" }}>{PLAN_PRICES[p]}</div>
-                <ul style={{ margin: 0, padding: 0, listStyle: "none", flex: 1, display: "flex", flexDirection: "column", gap: 3 }}>
-                  {featureList.map((line) => (
-                    <li key={line} style={{ fontSize: 11.5, color: "#6d7175" }}>{line}</li>
-                  ))}
-                </ul>
-                <button
-                  type="button"
-                  disabled={isCurrent}
-                  onClick={() => submit({ intent: "switch_plan", plan: p }, { method: "post" })}
-                  style={isCurrent ? secondaryButtonStyle : primaryButtonStyle}
-                >
-                  {isCurrent ? "Active" : "Switch"}
-                </button>
-              </div>
-            );
-          })}
-        </div>
-        <p style={{ fontSize: 11.5, color: "#919191" }}>
-          Plan changes are immediate. Real billing via Shopify is coming soon.
-        </p>
+                Cancel subscription / Delete account →
+              </a>
+            </div>
+          </>
+        )}
         </>
       )}
 
@@ -663,26 +598,6 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {showCongrats && (
-        <div style={modalOverlayStyle}>
-          <div style={modalCardStyle}>
-            <h2 style={{ fontSize: 18, fontWeight: 700, color: "var(--vaultd-accent, #1a1a1a)", margin: "0 0 8px 0" }}>
-              Welcome to {PLAN_LABELS[currentPlan]}!
-            </h2>
-            <p style={{ fontSize: 13.5, color: "#303030", margin: "0 0 14px 0" }}>
-              With this plan, you can now use:
-            </p>
-            <ul style={{ margin: "0 0 18px 0", paddingLeft: 18, display: "flex", flexDirection: "column", gap: 6 }}>
-              {getPlanFeatureList(currentPlan).map((line) => (
-                <li key={line} style={{ fontSize: 13.5, color: "#1a1a1a" }}>{line}</li>
-              ))}
-            </ul>
-            <button type="button" style={primaryButtonStyle} onClick={() => setDismissedCongrats(true)}>
-              Got it
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

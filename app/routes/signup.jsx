@@ -2,6 +2,9 @@ import { redirect } from "react-router";
 import { Form, Link, useActionData } from "react-router";
 import bcrypt from "bcryptjs";
 import { getWebSession, commitWebSession, getWebAccountOptional } from "../auth.web.server";
+import { sendWelcomeEmail, validatePassword } from "../vaultd-account.server";
+
+const USERNAME_RE = /^[a-z0-9_]{3,20}$/;
 
 export const loader = async ({ request }) => {
   const account = await getWebAccountOptional(request);
@@ -12,29 +15,41 @@ export const loader = async ({ request }) => {
 export const action = async ({ request }) => {
   const form = await request.formData();
   const email = form.get("email")?.toString().toLowerCase().trim() ?? "";
+  const username = form.get("username")?.toString().toLowerCase().trim() ?? "";
   const password = form.get("password")?.toString() ?? "";
   const confirm = form.get("confirm")?.toString() ?? "";
 
-  if (!email || !password) {
-    return { error: "Email and password are required." };
+  if (!email || !password || !username) {
+    return { error: "All fields are required." };
   }
-  if (password.length < 8) {
-    return { error: "Password must be at least 8 characters." };
+  if (!USERNAME_RE.test(username)) {
+    return { error: "Username must be 3–20 characters: lowercase letters, numbers, or underscore only." };
   }
+  const passwordError = validatePassword(password);
+  if (passwordError) return { error: passwordError };
   if (password !== confirm) {
     return { error: "Passwords do not match." };
   }
 
   const { default: db } = await import("../db.server");
-  const existing = await db.vaultdAccount.findFirst({ where: { email } });
-  if (existing) {
+
+  const existingEmail = await db.vaultdAccount.findFirst({ where: { email } });
+  if (existingEmail) {
     return { error: "An account with this email already exists." };
+  }
+  const existingUsername = await db.vaultdAccount.findFirst({ where: { username } });
+  if (existingUsername) {
+    return { error: "This username is already taken." };
   }
 
   const passwordHash = await bcrypt.hash(password, 12);
   const account = await db.vaultdAccount.create({
-    data: { email, passwordHash, plan: "FREE" },
+    data: { email, passwordHash, username },
   });
+
+  try {
+    await sendWelcomeEmail(email, username);
+  } catch (_) {}
 
   const session = await getWebSession(request);
   session.set("accountId", account.id);
@@ -49,7 +64,7 @@ export default function SignupPage() {
 
   return (
     <div style={rootStyle}>
-      <header style={{ position: "fixed", top: 0, left: 0, right: 0, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 32px" }}>
+      <header style={headerStyle}>
         <Link to="/" style={logoStyle}>Vaultd</Link>
         <Link to="/login" style={headerBtnStyle}>Log in</Link>
       </header>
@@ -66,7 +81,18 @@ export default function SignupPage() {
         )}
 
         <Form method="post" style={formStyle}>
-          <label style={labelStyle}>Email</label>
+          <label style={labelStyle}>Username</label>
+          <input
+            type="text"
+            name="username"
+            required
+            autoComplete="username"
+            placeholder="e.g. mybrand"
+            style={inputStyle}
+          />
+          <p style={hintStyle}>3–20 characters, lowercase letters, numbers, or underscore.</p>
+
+          <label style={{ ...labelStyle, marginTop: 12 }}>Email</label>
           <input
             type="email"
             name="email"
@@ -74,6 +100,7 @@ export default function SignupPage() {
             autoComplete="email"
             style={inputStyle}
           />
+
           <label style={{ ...labelStyle, marginTop: 12 }}>Password</label>
           <input
             type="password"
@@ -82,6 +109,8 @@ export default function SignupPage() {
             autoComplete="new-password"
             style={inputStyle}
           />
+          <p style={hintStyle}>Min. 8 characters, with uppercase, lowercase, digit and special character.</p>
+
           <label style={{ ...labelStyle, marginTop: 12 }}>Confirm password</label>
           <input
             type="password"
@@ -106,6 +135,16 @@ const rootStyle = {
   alignItems: "center",
   justifyContent: "center",
   padding: "24px",
+};
+const headerStyle = {
+  position: "fixed",
+  top: 0,
+  left: 0,
+  right: 0,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  padding: "16px 32px",
 };
 const logoStyle = {
   fontSize: 18,
@@ -138,6 +177,7 @@ const errorStyle = {
 };
 const formStyle = { display: "flex", flexDirection: "column" };
 const labelStyle = { color: "#707070", fontSize: 12.5, fontWeight: 500, marginBottom: 6 };
+const hintStyle = { color: "#404040", fontSize: 11.5, margin: "4px 0 0" };
 const inputStyle = {
   background: "#141414",
   border: "1px solid #242424",

@@ -37,8 +37,8 @@ export const loader = async ({ request }) => {
   // se cache silencieusement sur le storefront au lieu d'afficher une
   // erreur ou des donnees a un visiteur d'une boutique non eligible.
   const account = await getAccountForShop(shopDomain);
-  const plan = account?.plan ?? "FREE";
-  if (!PLAN_FEATURES[plan].includes("hype_widgets")) {
+  const plan = account?.plan ?? null;
+  if (!(PLAN_FEATURES[plan] ?? []).includes("hype_widgets")) {
     return Response.json({ drop: null });
   }
 

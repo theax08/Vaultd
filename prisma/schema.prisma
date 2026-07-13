@@ -29,10 +29,11 @@ model Session {
 
 model VaultdAccount {
   id              String    @id @default(cuid())
+  username        String?   @unique
   plan            String    @default("FREE")
   lastSeenPlan    String    @default("FREE")
   appearanceColor String    @default("black")
-  email           String?
+  email           String?   @unique
   passwordHash    String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt

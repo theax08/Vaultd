@@ -6,11 +6,12 @@ export const SECTIONS = [
   {
     key: "waitlist",
     title: "Waitlists",
-    minPlan: "FREE",
+    minPlan: "GROWTH",
     intro: "Let customers join a waitlist for a drop and track their position in real time.",
     tips: [
       "Share your drop's waitlist link on social media before the drop goes live to build a queue.",
       "Each entry gets a referral link — sharing it moves people up the list, which naturally drives more signups.",
+      "Referral links are a merchant-side feature: customers have no way to know whether a referral program is active just from the widget. Always announce it explicitly in your drop marketing — email, caption, or story — so customers actually know to share their link.",
       "Customers can see their live position and how many people are ahead of them.",
       "Use the Waitlists page to export or review who joined, and when.",
     ],
@@ -35,6 +36,7 @@ export const SECTIONS = [
       "Compare conversion rate across drops to see which products or pricing convert best.",
       "Sell-out time tells you if you should increase stock or run shorter drop windows.",
       "Use the per-product breakdown to plan inventory for your next drop.",
+      "Traffic source data (Instagram, TikTok, Vaultd Emails, etc.) is recorded by the Vaultd waitlist widget on your storefront page. Each time a visitor loads the page, the widget reads the ?vaultd_src= parameter from the URL and logs the source. If the widget isn't embedded on the page, or the visitor arrives without that parameter (typed the URL directly, followed an untracked link), the visit is counted as 'other' or not recorded at all. Vaultd email links are tagged automatically when sent. For social sources, add ?vaultd_src=instagram or ?vaultd_src=tiktok to any link you share — e.g. your Instagram story swipe-up URL or TikTok bio link.",
     ],
   },
   {
@@ -72,6 +74,7 @@ export const SECTIONS = [
       "In the drop editor, set a start time then toggle Auto-launch & auto-close on.",
       "Auto-launch only checks while Vaultd is open in your Shopify admin — it runs on page load, not in the background. If nobody has the app open at the scheduled time, the drop won't go live until someone opens Vaultd again.",
       "Auto-close fires once all units are sold. There's a 5-minute grace period after the last sale before the drop is officially ended — this covers edge cases like a last-minute cancellation that frees up a unit.",
+      "Important: Vaultd closing a drop does not modify your Shopify inventory. Your store can still accept new orders after Vaultd marks a drop as sold out. If you need to prevent additional sales, set the relevant product variants to \"out of stock\" in your Shopify admin manually, or use Shopify's inventory policy to cap available quantity.",
       "Combine with the countdown widget so customers see the exact same launch time you scheduled.",
     ],
   },
@@ -119,6 +122,19 @@ export const SECTIONS = [
     intro: "Faster response times when you contact support.",
     tips: [
       "Use the Contact support link from the Dashboard — Elite requests are flagged for priority handling.",
+    ],
+  },
+  {
+    key: "account_management",
+    title: "Account & subscription management",
+    minPlan: "GROWTH",
+    intro: "How to manage your Vaultd account, cancel your subscription, or delete your account.",
+    tips: [
+      "Your Vaultd account is created automatically when you subscribe to a plan via the Shopify App Store. If you signed up at vaultd.pro before installing the app and used the same email, the accounts are linked automatically.",
+      "To cancel your subscription or delete your account, go to Settings → Account and click \"Cancel subscription / Delete account\" — this opens the account portal on vaultd.pro where you can manage everything.",
+      "Deleting your Vaultd account removes all your data (drops, waitlists, analytics). It does NOT cancel your Shopify subscription automatically — you must also cancel it from your Shopify admin (Apps → Manage apps → Vaultd → Cancel plan) to stop being charged.",
+      "To reset your password, visit vaultd.pro/forgot-password. A reset code is emailed to the address on your account.",
+      "A confirmation email is sent to your account email address for account creation and account deletion.",
     ],
   },
 ];
