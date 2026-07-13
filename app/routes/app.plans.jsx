@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { useActionData, useLoaderData, useSubmit, useSearchParams, Link } from "react-router";
 import { authenticate } from "../shopify.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
-import { getAccountForShop, createAccountForShop } from "../vaultd-account.server";
 import { PLAN_ORDER, PLAN_LABELS, PLAN_PRICES, getPlanFeatureList } from "../vaultd-plans";
 import {
   pagePopStyle,
@@ -22,6 +21,7 @@ import {
 
 export const loader = async ({ request }) => {
   const { admin, session } = await authenticate.admin(request);
+  const { getAccountForShop } = await import("../vaultd-account.server");
   let account = null;
   try {
     account = await getAccountForShop(session.shop);
