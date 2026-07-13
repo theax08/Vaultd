@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useActionData, useLoaderData, useSubmit, useSearchParams, Link } from "react-router";
 import { authenticate } from "../shopify.server";
+import { boundary } from "@shopify/shopify-app-react-router/server";
 import { getAccountForShop, createAccountForShop } from "../vaultd-account.server";
 import { PLAN_ORDER, PLAN_LABELS, PLAN_PRICES, getPlanFeatureList } from "../vaultd-plans";
 import {
@@ -99,7 +100,7 @@ export default function PlansPage() {
   );
 
   return (
-    <div style={pagePopStyle}>
+    <div style={{ ...pagePopStyle, minHeight: "100vh" }}>
       <Link to={backTo} style={backLinkStyle}>
         ← Back
       </Link>
@@ -200,3 +201,5 @@ export default function PlansPage() {
     </div>
   );
 }
+
+export const headers = (headersArgs) => boundary.headers(headersArgs);

@@ -1,4 +1,4 @@
-import { useLoaderData, useActionData, useSubmit } from "react-router";
+import { useLoaderData, useActionData, useSubmit, Link } from "react-router";
 import { useState, useEffect } from "react";
 import { authenticate } from "../shopify.server";
 import {
@@ -456,9 +456,9 @@ export default function SettingsPage() {
             {!isElite ? (
               <p style={{ fontSize: 13, color: "#6d7175" }}>
                 Linking another store to this account is only available on the Elite plan.{" "}
-                <a href="/app/plans" style={{ color: "#1a1a1a", fontWeight: 600 }}>
+                <Link to="/app/plans?from=settings" style={{ color: "#1a1a1a", fontWeight: 600 }}>
                   View plans →
-                </a>
+                </Link>
               </p>
             ) : (
               <p style={{ fontSize: 13, color: "#6d7175" }}>
@@ -551,7 +551,7 @@ export default function SettingsPage() {
           </p>
           <p style={{ fontSize: 13, color: "#6d7175", margin: 0 }}>
             Cloudflare Turnstile bot protection (stops scripted signups) is available on the Elite plan.{" "}
-            <a href="/app/plans" style={{ color: "#1a1a1a", fontWeight: 600 }}>View plans →</a>
+            <Link to="/app/plans?from=settings" style={{ color: "#1a1a1a", fontWeight: 600 }}>View plans →</Link>
           </p>
           </>
         ) : (
