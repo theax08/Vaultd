@@ -144,7 +144,13 @@ const headerStyle = {
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
-  padding: "16px 32px",
+  padding: "0 32px",
+  height: 60,
+  borderBottom: "1px solid #141414",
+  background: "rgba(8,8,8,0.88)",
+  backdropFilter: "blur(16px)",
+  WebkitBackdropFilter: "blur(16px)",
+  zIndex: 100,
 };
 const logoStyle = {
   fontSize: 18,
