@@ -1,5 +1,3 @@
--- AlterTable
-ALTER TABLE "VaultdAccount" ADD COLUMN "username" TEXT;
-
--- CreateIndex
-CREATE UNIQUE INDEX "VaultdAccount_username_key" ON "VaultdAccount"("username");
+-- username column removed from schema before it was applied in production.
+-- This migration is intentionally a no-op.
+SELECT 1;

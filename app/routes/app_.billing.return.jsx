@@ -23,7 +23,7 @@ export const loader = async ({ request }) => {
   const db = dbModule.default;
 
   // Fetch app handle + merchant email for proper redirect URL and account sync
-  let appHandle = process.env.SHOPIFY_APP_HANDLE || null;
+  let appHandle = process.env.SHOPIFY_APP_HANDLE || "vaultd-1";
   let merchantEmail = null;
   try {
     const { admin: adminAuth } = await unauthenticated.admin(shop);

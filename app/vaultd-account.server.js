@@ -95,7 +95,7 @@ export async function deleteAccount(accountId) {
   await db.vaultdAccount.delete({ where: { id: accountId } });
 
   try {
-    await sendAccountDeletionEmail(account.email, account.username);
+    await sendAccountDeletionEmail(account.email, null);
   } catch (_) {}
 
   return { success: true };
@@ -128,7 +128,7 @@ export async function createAccountForShop(shopDomain, { email, password, userna
   }
 
   const account = await db.vaultdAccount.create({
-    data: { email: email || null, passwordHash, username: username || null },
+    data: { email: email || null, passwordHash },
   });
   await db.shopSettings.upsert({
     where: { shopDomain },
