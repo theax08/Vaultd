@@ -19,17 +19,21 @@ export const loader = async ({ request }) => {
 
   let account = null;
   let hasSupportUnread = false;
+  let accountDbReady = false;
   try {
     account = await getAccountForShop(session.shop);
+    accountDbReady = true;
   } catch {}
   try {
     hasSupportUnread = await hasUnreadOwnerReplies(session.shop);
   } catch {}
 
   const plan = account?.plan ?? null;
-  const hasPlan = PLAN_ORDER.includes(plan);
+  // Only gate if the DB is reachable and no plan found.
+  // If DB is unreachable (table missing, migration not run) let the user through
+  // to avoid locking everyone out during a deployment.
+  const hasPlan = !accountDbReady || PLAN_ORDER.includes(plan);
 
-  // Gate : toute route /app/* autre que /plans et /billing/* nécessite un plan actif.
   const url = new URL(request.url);
   const exempt = url.pathname.startsWith("/app/plans") || url.pathname.startsWith("/app/billing");
   if (!hasPlan && !exempt) {
@@ -45,7 +49,7 @@ export const loader = async ({ request }) => {
     hasNewFeatures: account ? account.lastSeenPlan !== account.plan : false,
     features,
     hasSupportUnread,
-    needsOnboarding: !account && hasPlan,
+    needsOnboarding: accountDbReady && !account,
   };
 };
 
