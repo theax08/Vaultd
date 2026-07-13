@@ -8,7 +8,7 @@ import {
   requestPasswordReset,
   resetPasswordWithCode,
 } from "../vaultd-account.server";
-import { canUseColor, PLAN_SUMMARIES, COLOR_OPTIONS, PLAN_ORDER, PLAN_LABELS } from "../vaultd-plans";
+import { canUseColor, PLAN_SUMMARIES, COLOR_OPTIONS, PLAN_ORDER } from "../vaultd-plans";
 import {
   pagePopStyle,
   pageHeaderRowStyle,
@@ -76,7 +76,7 @@ export const loader = async ({ request }) => {
 };
 
 export const action = async ({ request }) => {
-  const { session, billing } = await authenticate.admin(request);
+  const { session } = await authenticate.admin(request);
   const shopDomain = session.shop;
   const dbModule = await import("../db.server");
   const db = dbModule.default;
@@ -119,19 +119,6 @@ export const action = async ({ request }) => {
     return { intent, success: true };
   }
 
-  if (intent === "switch_plan") {
-    const nextPlan = (formData.get("plan") || "").toString();
-    if (!PLAN_ORDER.includes(nextPlan)) return { intent, error: "Invalid plan." };
-
-    // Tous les plans sont payants — billing.request redirige vers Shopify.
-    const returnUrl = `${process.env.SHOPIFY_APP_URL}/app/billing/return?plan=${nextPlan}`;
-    await billing.request({
-      plan: PLAN_LABELS[nextPlan],
-      isTest: process.env.NODE_ENV !== "production",
-      returnUrl,
-    });
-  }
-
   if (intent === "update_bot_protection") {
     const db = (await import("../db.server")).default;
     const botProtectionEnabled = formData.get("botProtectionEnabled") === "on";
@@ -141,6 +128,14 @@ export const action = async ({ request }) => {
       where: { shopDomain },
       create: { shopDomain, botProtectionEnabled, turnstileSiteKey: turnstileSiteKey || null, turnstileSecretKey: turnstileSecretKey || null },
       update: { botProtectionEnabled, turnstileSiteKey: turnstileSiteKey || null, turnstileSecretKey: turnstileSecretKey || null },
+    });
+    return { intent, success: true };
+  }
+
+  if (intent === "disconnect_account") {
+    await db.shopSettings.update({
+      where: { shopDomain },
+      data: { vaultdAccountId: null },
     });
     return { intent, success: true };
   }
@@ -173,6 +168,7 @@ export default function SettingsPage() {
   const [loginPassword, setLoginPassword] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [activeSection, setActiveSection] = useState("account");
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false);
 
   const [bpEnabled, setBpEnabled] = useState(botProtection.enabled);
   const [bpSiteKey, setBpSiteKey] = useState(botProtection.siteKey);
@@ -451,6 +447,32 @@ export default function SettingsPage() {
                 </li>
               ))}
             </ul>
+
+            <div style={{ marginBottom: 16 }}>
+              {!confirmDisconnect ? (
+                <button
+                  type="button"
+                  onClick={() => setConfirmDisconnect(true)}
+                  style={{ background: "none", border: "1px solid #e3e3e3", borderRadius: 7, padding: "7px 12px", fontSize: 12.5, color: "#6d7175", cursor: "pointer" }}
+                >
+                  Disconnect this store from account
+                </button>
+              ) : (
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 12.5, color: "#303030" }}>Disconnect this store? It will lose access until re-linked.</span>
+                  <button
+                    type="button"
+                    onClick={() => { submit({ intent: "disconnect_account" }, { method: "post" }); setConfirmDisconnect(false); }}
+                    style={{ background: "#d82c2c", color: "#fff", border: "none", borderRadius: 7, padding: "6px 12px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}
+                  >
+                    Yes, disconnect
+                  </button>
+                  <button type="button" onClick={() => setConfirmDisconnect(false)} style={{ background: "none", border: "none", fontSize: 12.5, color: "#6d7175", cursor: "pointer" }}>
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
 
             <div style={cardLabel}>LINK ANOTHER STORE</div>
             {!isElite ? (
