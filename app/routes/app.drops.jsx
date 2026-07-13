@@ -672,7 +672,7 @@ export default function DropsPage() {
 
   return (
     <div style={pagePopStyle}>
-      <div style={{ marginBottom: 20 }}>
+      <div style={{ marginBottom: 20, display: "flex", justifyContent: "flex-end" }}>
         {dropsLeftThisMonth === 0 ? (
           <button type="button" disabled style={{ ...primaryButtonStyle, opacity: 0.55, cursor: "default" }}>
             Drop limit reached for this month
