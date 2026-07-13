@@ -290,12 +290,6 @@ export default function SettingsPage() {
 
   return (
     <div style={pagePopStyle}>
-      <div style={pageHeaderRowStyle}>
-        <div style={pageHeaderTitleRowStyle}>
-          <GridIcon />
-          <h1 style={pageHeaderTitleStyle}>Settings</h1>
-        </div>
-      </div>
 
       {isOnboarding && (
         <div style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 10, padding: "14px 18px", marginBottom: 16 }}>

@@ -140,17 +140,6 @@ export default function Dashboard() {
 
   return (
     <div style={pagePopStyle}>
-      <div style={pageHeaderRowStyle}>
-        <div style={pageHeaderTitleRowStyle}>
-          <GridIcon />
-          <div>
-            <h1 style={pageHeaderTitleStyle}>Dashboard</h1>
-          </div>
-        </div>
-      </div>
-      <p style={{ fontSize: 13, color: "#6d7175", margin: "-12px 0 16px 0" }}>
-        Overview of your drops and performance
-      </p>
 
       {/* KPI cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 14, marginBottom: 16 }}>

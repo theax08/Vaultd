@@ -389,29 +389,6 @@ export default function DropsHistoryPage() {
           'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", sans-serif',
       }}
     >
-      {/* En-tête de page */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: 20,
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-          }}
-        >
-          <div>
-            <GridIcon />
-          </div>
-
-          <h1 style={pageHeaderTitleStyle}>Drop History</h1>
-        </div>
-      </div>
 
       {/* KPI cards */}
       <div

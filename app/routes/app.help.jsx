@@ -49,12 +49,6 @@ export default function HelpPage() {
 
   return (
     <div style={pagePopStyle}>
-      <div style={{ ...pageHeaderRowStyle, marginBottom: 0 }}>
-        <div style={pageHeaderTitleRowStyle}>
-          <GridIcon />
-          <h1 style={pageHeaderTitleStyle}>Help</h1>
-        </div>
-      </div>
       <Link to={backTo} style={backLinkStyle}>
         ← Back
       </Link>

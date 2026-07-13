@@ -156,12 +156,6 @@ export default function WaitlistsPage() {
 
   return (
     <div style={pagePopStyle}>
-      <div style={pageHeaderRowStyle}>
-        <div style={pageHeaderTitleRowStyle}>
-          <GridIcon />
-          <h1 style={pageHeaderTitleStyle}>Waitlists</h1>
-        </div>
-      </div>
 
       <div style={cardLabel}>ALL ACTIVE QUEUES</div>
       <div>

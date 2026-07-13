@@ -87,12 +87,6 @@ export default function BotProtectionPage() {
 
   return (
     <div style={pagePopStyle}>
-      <div style={pageHeaderRowStyle}>
-        <div style={pageHeaderTitleRowStyle}>
-          <GridIcon />
-          <h1 style={pageHeaderTitleStyle}>Bot protection</h1>
-        </div>
-      </div>
 
       <div style={{ ...cardPadded, maxWidth: 560 }}>
         <div style={cardLabel}>BOT PROTECTION</div>

@@ -233,10 +233,6 @@ export default function SupportPage() {
 
   return (
     <div style={{ ...pagePopStyle, display: "flex", flexDirection: "column", minHeight: "calc(100vh - 64px)" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <GridIcon />
-        <h1 style={pageHeaderTitleStyle}>Support</h1>
-      </div>
       <Link to={backTo} style={backLinkStyle}>
         ← Back
       </Link>

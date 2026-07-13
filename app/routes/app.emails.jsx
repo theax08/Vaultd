@@ -404,12 +404,6 @@ export default function EmailsPage() {
 
   return (
     <div style={pagePopStyle}>
-      <div style={pageHeaderRowStyle}>
-        <div style={pageHeaderTitleRowStyle}>
-          <GridIcon />
-          <h1 style={pageHeaderTitleStyle}>Emails</h1>
-        </div>
-      </div>
 
       {actionData?.success && (
         <div style={{ marginBottom: 12 }}>
