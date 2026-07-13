@@ -173,9 +173,9 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: 14, alignItems: "stretch" }}>
-        {/* Recent drops */}
-        <div style={{ ...cardPadded, flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 14, alignItems: "start" }}>
+        {/* Recent drops — spans 3 of 4 columns to align with KPI grid */}
+        <div style={{ ...cardPadded, gridColumn: "span 3", display: "flex", flexDirection: "column", minHeight: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
             <span style={{ fontSize: 14, fontWeight: 700, color: "var(--vaultd-accent, #1a1a1a)" }}>Recent drops</span>
             <Link to="/app/drops" style={{ fontSize: 13, fontWeight: 600, color: "var(--vaultd-accent, #1a1a1a)" }}>
@@ -222,8 +222,8 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Right column */}
-        <div style={{ width: 280, display: "flex", flexDirection: "column", gap: 14 }}>
+        {/* Right column — 1 column, same width as one KPI card */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           {!setupComplete && (
             <div style={cardPadded}>
               <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--vaultd-accent, #1a1a1a)", marginBottom: 10 }}>
