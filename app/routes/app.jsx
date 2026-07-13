@@ -35,7 +35,10 @@ export const loader = async ({ request }) => {
   const hasPlan = !accountDbReady || PLAN_ORDER.includes(plan);
 
   const url = new URL(request.url);
-  const exempt = url.pathname.startsWith("/app/plans") || url.pathname.startsWith("/app/billing");
+  const exempt =
+    url.pathname.startsWith("/app/plans") ||
+    url.pathname.startsWith("/app/billing") ||
+    url.pathname.startsWith("/app/settings");
   if (!hasPlan && !exempt) {
     const { redirect: redir } = await import("react-router");
     return redir("/app/plans?from=gate");
