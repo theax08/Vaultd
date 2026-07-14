@@ -30,19 +30,8 @@ export const loader = async ({ request }) => {
 
   const plan = account?.plan ?? null;
   // Only gate if the DB is reachable and no plan found.
-  // If DB is unreachable (table missing, migration not run) let the user through
-  // to avoid locking everyone out during a deployment.
+  // If DB is unreachable let the user through to avoid locking everyone out.
   const hasPlan = !accountDbReady || PLAN_ORDER.includes(plan);
-
-  const url = new URL(request.url);
-  const exempt =
-    url.pathname.startsWith("/app/plans") ||
-    url.pathname.startsWith("/app/billing") ||
-    url.pathname.startsWith("/app/settings");
-  if (!hasPlan && !exempt) {
-    const { redirect: redir } = await import("react-router");
-    return redir("/app/plans?from=gate");
-  }
 
   const features = PLAN_FEATURES[plan] ?? [];
 
@@ -53,17 +42,28 @@ export const loader = async ({ request }) => {
     features,
     hasSupportUnread,
     needsOnboarding: accountDbReady && !account,
+    hasPlan,
   };
 };
 
 export default function App() {
-  const { apiKey, accentColor, features, hasSupportUnread, needsOnboarding } = useLoaderData();
+  const { apiKey, accentColor, features, hasSupportUnread, needsOnboarding, hasPlan } = useLoaderData();
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Client-side redirect so App Bridge is initialized before the next auth check.
-  // A server-side redirect drops the session JWT, causing authenticate.admin to
-  // trigger OAuth inside the iframe, which admin.shopify.com blocks (X-Frame-Options).
+  const gateExempt =
+    location.pathname.startsWith("/app/plans") ||
+    location.pathname.startsWith("/app/billing") ||
+    location.pathname.startsWith("/app/settings");
+
+  // Client-side redirects: server-side redirects drop the Shopify session JWT,
+  // which causes authenticate.admin to trigger OAuth inside the iframe (blank screen).
+  useEffect(() => {
+    if (!hasPlan && !gateExempt) {
+      navigate("/app/plans?from=gate");
+    }
+  }, [hasPlan, gateExempt]);
+
   useEffect(() => {
     if (needsOnboarding && !location.pathname.startsWith("/app/settings")) {
       navigate("/app/settings?onboarding=1");
@@ -73,19 +73,23 @@ export default function App() {
   return (
     <AppProvider embedded apiKey={apiKey}>
       <style dangerouslySetInnerHTML={{ __html: GLOBAL_POP_CSS }} />
-      <s-app-nav>
-        <s-link href="/app">Home</s-link>
-        <s-link href="/app/drops">Drops</s-link>
-        <s-link href="/app/waitlists">Waitlists</s-link>
-        {features.includes("automated_emails") && (
-          <s-link href="/app/emails">Emails</s-link>
-        )}
-        <s-link href="/app/drops-history">Drops History</s-link>
-        <s-link href="/app/settings">Settings</s-link>
-      </s-app-nav>
-      <div style={{ "--vaultd-accent": accentColor }}>
-        <Outlet />
-      </div>
+      {(!hasPlan && !gateExempt) ? null : (
+        <>
+          <s-app-nav>
+            <s-link href="/app">Home</s-link>
+            <s-link href="/app/drops">Drops</s-link>
+            <s-link href="/app/waitlists">Waitlists</s-link>
+            {features.includes("automated_emails") && (
+              <s-link href="/app/emails">Emails</s-link>
+            )}
+            <s-link href="/app/drops-history">Drops History</s-link>
+            <s-link href="/app/settings">Settings</s-link>
+          </s-app-nav>
+          <div style={{ "--vaultd-accent": accentColor }}>
+            <Outlet />
+          </div>
+        </>
+      )}
     </AppProvider>
   );
 }
