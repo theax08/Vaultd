@@ -1,13 +1,12 @@
 // app/routes/app.jsx
-import { useEffect } from "react";
-import { Outlet, useLoaderData, useRouteError, useNavigate, useLocation } from "react-router";
+import { Link, Outlet, useLoaderData, useRouteError, useLocation } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
 import { authenticate } from "../shopify.server";
 import { getAccountForShop } from "../vaultd-account.server";
 import { COLOR_OPTIONS, PLAN_FEATURES, PLAN_ORDER } from "../vaultd-plans";
 import { hasUnreadOwnerReplies } from "../support.server";
-import { GLOBAL_POP_CSS } from "../styles/pop-ui";
+import { GLOBAL_POP_CSS, primaryButtonStyle } from "../styles/pop-ui";
 
 const ACCENT_HEX = COLOR_OPTIONS.reduce((acc, o) => {
   acc[o.key] = o.hex;
@@ -29,10 +28,7 @@ export const loader = async ({ request }) => {
   } catch {}
 
   const plan = account?.plan ?? null;
-  // Only gate if the DB is reachable and no plan found.
-  // If DB is unreachable let the user through to avoid locking everyone out.
   const hasPlan = !accountDbReady || PLAN_ORDER.includes(plan);
-
   const features = PLAN_FEATURES[plan] ?? [];
 
   return {
@@ -48,7 +44,6 @@ export const loader = async ({ request }) => {
 
 export default function App() {
   const { apiKey, accentColor, features, hasSupportUnread, needsOnboarding, hasPlan } = useLoaderData();
-  const navigate = useNavigate();
   const location = useLocation();
 
   const gateExempt =
@@ -56,53 +51,43 @@ export default function App() {
     location.pathname.startsWith("/app/billing") ||
     location.pathname.startsWith("/app/settings");
 
-  // Preserve Shopify session params (host, shop) in client-side navigations so
-  // App Bridge keeps its parent-origin reference and can inject the JWT header.
-  const shopifyParams = () => {
-    const p = new URLSearchParams(location.search);
-    const out = new URLSearchParams();
-    if (p.get("host")) out.set("host", p.get("host"));
-    if (p.get("shop")) out.set("shop", p.get("shop"));
-    return out.toString() ? `&${out}` : "";
-  };
-
-  useEffect(() => {
-    if (!hasPlan && !gateExempt) {
-      navigate(`/app/plans?from=gate${shopifyParams()}`);
-    }
-  }, [hasPlan, gateExempt]);
-
-  useEffect(() => {
-    if (needsOnboarding && !location.pathname.startsWith("/app/settings")) {
-      navigate(`/app/settings?onboarding=1${shopifyParams()}`);
-    }
-  }, [needsOnboarding, location.pathname]);
-
   const gated = !hasPlan && !gateExempt;
 
   return (
     <AppProvider embedded apiKey={apiKey}>
       <style dangerouslySetInnerHTML={{ __html: GLOBAL_POP_CSS }} />
-      {!gated && (
-        <s-app-nav>
-          <s-link href="/app">Home</s-link>
-          <s-link href="/app/drops">Drops</s-link>
-          <s-link href="/app/waitlists">Waitlists</s-link>
-          {features.includes("automated_emails") && (
-            <s-link href="/app/emails">Emails</s-link>
-          )}
-          <s-link href="/app/drops-history">Drops History</s-link>
-          <s-link href="/app/settings">Settings</s-link>
-        </s-app-nav>
-      )}
-      {/* Outlet must always mount so React Router can attach child routes.
-          Hiding via CSS avoids the hydration mismatch caused by a conditional Outlet. */}
-      <div
-        style={{
-          "--vaultd-accent": accentColor,
-          ...(gated ? { visibility: "hidden", pointerEvents: "none" } : {}),
-        }}
-      >
+      <s-app-nav>
+        <s-link href="/app">Home</s-link>
+        <s-link href="/app/drops">Drops</s-link>
+        <s-link href="/app/waitlists">Waitlists</s-link>
+        {features.includes("automated_emails") && (
+          <s-link href="/app/emails">Emails</s-link>
+        )}
+        <s-link href="/app/drops-history">Drops History</s-link>
+        <s-link href="/app/settings">Settings</s-link>
+      </s-app-nav>
+      <div style={{ "--vaultd-accent": accentColor, position: "relative" }}>
+        {/* Gate overlay: rendered on top without any navigation or URL change.
+            Using a React Router Link preserves the App Bridge session context. */}
+        {gated && (
+          <div style={{
+            position: "fixed", inset: 0,
+            background: "rgba(255,255,255,0.97)",
+            display: "flex", flexDirection: "column",
+            alignItems: "center", justifyContent: "center",
+            zIndex: 9999, gap: 16,
+          }}>
+            <p style={{ fontSize: 17, fontWeight: 700, color: "#1a1a1a", margin: 0 }}>
+              Choose a plan to access Vaultd
+            </p>
+            <p style={{ fontSize: 14, color: "#6d7175", margin: 0 }}>
+              Select a plan to unlock all features.
+            </p>
+            <Link to="/app/plans?from=gate" style={{ ...primaryButtonStyle, textDecoration: "none" }}>
+              View plans
+            </Link>
+          </div>
+        )}
         <Outlet />
       </div>
     </AppProvider>
