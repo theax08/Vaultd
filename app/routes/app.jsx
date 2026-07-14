@@ -70,26 +70,33 @@ export default function App() {
     }
   }, [needsOnboarding, location.pathname]);
 
+  const gated = !hasPlan && !gateExempt;
+
   return (
     <AppProvider embedded apiKey={apiKey}>
       <style dangerouslySetInnerHTML={{ __html: GLOBAL_POP_CSS }} />
-      {(!hasPlan && !gateExempt) ? null : (
-        <>
-          <s-app-nav>
-            <s-link href="/app">Home</s-link>
-            <s-link href="/app/drops">Drops</s-link>
-            <s-link href="/app/waitlists">Waitlists</s-link>
-            {features.includes("automated_emails") && (
-              <s-link href="/app/emails">Emails</s-link>
-            )}
-            <s-link href="/app/drops-history">Drops History</s-link>
-            <s-link href="/app/settings">Settings</s-link>
-          </s-app-nav>
-          <div style={{ "--vaultd-accent": accentColor }}>
-            <Outlet />
-          </div>
-        </>
+      {!gated && (
+        <s-app-nav>
+          <s-link href="/app">Home</s-link>
+          <s-link href="/app/drops">Drops</s-link>
+          <s-link href="/app/waitlists">Waitlists</s-link>
+          {features.includes("automated_emails") && (
+            <s-link href="/app/emails">Emails</s-link>
+          )}
+          <s-link href="/app/drops-history">Drops History</s-link>
+          <s-link href="/app/settings">Settings</s-link>
+        </s-app-nav>
       )}
+      {/* Outlet must always mount so React Router can attach child routes.
+          Hiding via CSS avoids the hydration mismatch caused by a conditional Outlet. */}
+      <div
+        style={{
+          "--vaultd-accent": accentColor,
+          ...(gated ? { visibility: "hidden", pointerEvents: "none" } : {}),
+        }}
+      >
+        <Outlet />
+      </div>
     </AppProvider>
   );
 }
