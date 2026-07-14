@@ -35,9 +35,7 @@ const shopify = shopifyApp({
   authPathPrefix: "/auth",
   sessionStorage: new PrismaSessionStorage(prisma),
   distribution: AppDistribution.AppStore,
-  future: {
-    expiringOfflineAccessTokens: true,
-  },
+  future: {},
   billing: {
     [PLAN_LABELS.GROWTH]: {
       replacementBehavior: BillingReplacementBehavior.ApplyImmediately,

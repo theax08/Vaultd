@@ -28,7 +28,9 @@ export const loader = async ({ request }) => {
   } catch {}
 
   const plan = account?.plan ?? null;
-  const hasPlan = !accountDbReady || PLAN_ORDER.includes(plan);
+  // Gate only if DB is up AND account exists AND plan is invalid.
+  // New installs (no account yet) always pass — let them explore.
+  const hasPlan = !accountDbReady || account === null || PLAN_ORDER.includes(plan);
   const features = PLAN_FEATURES[plan] ?? [];
 
   return {
@@ -94,9 +96,21 @@ export default function App() {
   );
 }
 
-// Shopify needs React Router to catch some thrown responses
 export function ErrorBoundary() {
-  return boundary.error(useRouteError());
+  const error = useRouteError();
+  try {
+    return boundary.error(error);
+  } catch {
+    // boundary.error re-throws non-ErrorResponse errors (e.g. client-side
+    // deserialization loses the constructor name) — show visible fallback.
+    return (
+      <div style={{ padding: 32, fontFamily: "system-ui, sans-serif", color: "#1a1a1a" }}>
+        <p style={{ fontSize: 15, margin: 0 }}>
+          Something went wrong. Please refresh the page.
+        </p>
+      </div>
+    );
+  }
 }
 
 export const headers = (headersArgs) => {
