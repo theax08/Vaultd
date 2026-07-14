@@ -56,17 +56,25 @@ export default function App() {
     location.pathname.startsWith("/app/billing") ||
     location.pathname.startsWith("/app/settings");
 
-  // Client-side redirects: server-side redirects drop the Shopify session JWT,
-  // which causes authenticate.admin to trigger OAuth inside the iframe (blank screen).
+  // Preserve Shopify session params (host, shop) in client-side navigations so
+  // App Bridge keeps its parent-origin reference and can inject the JWT header.
+  const shopifyParams = () => {
+    const p = new URLSearchParams(location.search);
+    const out = new URLSearchParams();
+    if (p.get("host")) out.set("host", p.get("host"));
+    if (p.get("shop")) out.set("shop", p.get("shop"));
+    return out.toString() ? `&${out}` : "";
+  };
+
   useEffect(() => {
     if (!hasPlan && !gateExempt) {
-      navigate("/app/plans?from=gate");
+      navigate(`/app/plans?from=gate${shopifyParams()}`);
     }
   }, [hasPlan, gateExempt]);
 
   useEffect(() => {
     if (needsOnboarding && !location.pathname.startsWith("/app/settings")) {
-      navigate("/app/settings?onboarding=1");
+      navigate(`/app/settings?onboarding=1${shopifyParams()}`);
     }
   }, [needsOnboarding, location.pathname]);
 
