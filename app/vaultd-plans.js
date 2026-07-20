@@ -65,22 +65,27 @@ export const PLAN_FEATURES = (() => {
 })();
 
 function dropsLine(plan) {
-  const n = PLAN_LIMITS[plan].maxDropsPerMonth;
+  const limits = PLAN_LIMITS[plan];
+  if (!limits) return null;
+  const n = limits.maxDropsPerMonth;
   return n == null ? "Unlimited drops" : `${n} drop${n > 1 ? "s" : ""}/month`;
 }
 
 function unitsLine(plan) {
-  const n = PLAN_LIMITS[plan].maxUnitsPerDrop;
+  const limits = PLAN_LIMITS[plan];
+  if (!limits) return null;
+  const n = limits.maxUnitsPerDrop;
   return n == null ? "Unlimited units per drop" : `Up to ${n} units/drop`;
 }
 
 // Liste complete (cumulative) des lignes a afficher pour un plan donne.
 export function getPlanFeatureList(plan) {
+  if (!plan || !PLAN_ORDER.includes(plan)) return [];
   const allKeys = (PLAN_FEATURES[plan] ?? []).filter((key) => key !== "unlimited_drops");
   const colorKeys = allKeys.filter((key) => key.startsWith("color_"));
   const featureKeys = allKeys.filter((key) => !key.startsWith("color_"));
   const labels = [...featureKeys, ...colorKeys].map((key) => FEATURE_LABELS[key]);
-  return [...labels, dropsLine(plan), unitsLine(plan)];
+  return [...labels, dropsLine(plan), unitsLine(plan)].filter(Boolean);
 }
 
 export const PLAN_SUMMARIES = PLAN_ORDER.reduce((acc, plan) => {
