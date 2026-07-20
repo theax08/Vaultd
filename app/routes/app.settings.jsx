@@ -389,7 +389,7 @@ export default function SettingsPage() {
                   ) : (
                     <form onSubmit={handleResetPassword} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                       <p style={{ fontSize: 12.5, color: "#6d7175", margin: "0 0 4px 0" }}>
-                        If that email is linked to a Vaultd account, a reset code was just sent to it. Enter the code and your new password below.
+                        If that email is linked to a Vaultd account, a reset code was just sent to it. Don't see it? Check your spam folder.
                       </p>
                       <input
                         type="text"
@@ -409,6 +409,13 @@ export default function SettingsPage() {
                       />
                       <div style={{ display: "flex", gap: 8 }}>
                         <button type="submit" style={primaryButtonStyle}>Reset password</button>
+                        <button
+                          type="button"
+                          onClick={handleRequestReset}
+                          style={{ background: "none", border: "none", fontSize: 12.5, color: "#6d7175", textDecoration: "underline", cursor: "pointer" }}
+                        >
+                          Resend code
+                        </button>
                         <button
                           type="button"
                           onClick={() => {
@@ -490,30 +497,6 @@ export default function SettingsPage() {
               </p>
             )}
 
-            <div style={{ marginTop: 18, paddingTop: 16, borderTop: "1px solid #e3e3e3" }}>
-              <div style={cardLabel}>MANAGE ACCOUNT</div>
-              <p style={{ fontSize: 13, color: "#6d7175", margin: "6px 0 10px 0" }}>
-                To cancel your subscription or delete your Vaultd account, visit the account portal on our website.
-              </p>
-              <a
-                href={`${process.env.SHOPIFY_APP_URL ?? "https://vaultd.pro"}/account`}
-                target="_blank"
-                rel="noreferrer"
-                style={{
-                  display: "inline-block",
-                  background: "transparent",
-                  border: "1px solid #d82c2c",
-                  color: "#d82c2c",
-                  borderRadius: 7,
-                  padding: "8px 14px",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  textDecoration: "none",
-                }}
-              >
-                Cancel subscription / Delete account →
-              </a>
-            </div>
           </>
         )}
         </>

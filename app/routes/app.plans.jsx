@@ -27,13 +27,19 @@ export const loader = async ({ request }) => {
     account = await getAccountForShop(session.shop);
   } catch {}
 
-  // Decode Shopify host param to build direct Shopify Admin URL for billing
-  // (avoids the Railway→re-auth→Shopify Admin round-trip that takes ~16s)
+  // Build the Shopify Admin URL base for billing links.
+  // Prefer the decoded ?host= param (exact); fall back to deriving it from the
+  // shop domain — admin.shopify.com/store/{handle} is always correct for
+  // partner-hosted stores, even when ?host= is absent (e.g. client-side nav).
   let shopifyAdminBase = null;
   let appHandle = null;
   try {
     const rawHost = new URL(request.url).searchParams.get("host");
-    if (rawHost) shopifyAdminBase = Buffer.from(rawHost, "base64url").toString();
+    if (rawHost) {
+      shopifyAdminBase = Buffer.from(rawHost, "base64url").toString();
+    } else {
+      shopifyAdminBase = `admin.shopify.com/store/${session.shop.replace(".myshopify.com", "")}`;
+    }
     const res = await admin.graphql(`{ app { handle } }`);
     const { data } = await res.json();
     appHandle = data?.app?.handle ?? null;
@@ -82,9 +88,10 @@ export default function PlansPage() {
   const submit = useSubmit();
   const [searchParams] = useSearchParams();
   const from = searchParams.get("from") === "settings" ? "settings" : "home";
-  const backTo = from === "settings" ? "/app/settings" : "/app";
+  const backTo = from === "settings" ? "/app/settings" : "/app/home";
 
   const billingResult = searchParams.get("billing");
+  const billingDebug = searchParams.get("debug") || "";
   // Quand billing=confirmed, le plan vient du parametre URL (plus fiable que
   // lire la DB juste apres le redirect — evite l'affichage "No subscription").
   const billingPlan = billingResult === "confirmed" ? searchParams.get("plan") : null;
@@ -115,6 +122,11 @@ export default function PlansPage() {
             }
             dismissKey={actionData || billingResult}
           />
+          {billingDebug && (
+            <div style={{ marginTop: 8, padding: "8px 12px", background: "#fff3cd", borderRadius: 6, fontSize: 11.5, color: "#5a4000", fontFamily: "monospace", wordBreak: "break-all" }}>
+              {billingDebug}
+            </div>
+          )}
         </div>
       )}
 
@@ -156,13 +168,13 @@ export default function PlansPage() {
                   Active
                 </button>
               ) : (
-                <a
-                  href={getBillingHref(plan)}
-                  target="_top"
-                  style={{ ...primaryButtonStyle, textDecoration: "none", display: "block", textAlign: "center" }}
+                <button
+                  type="button"
+                  style={primaryButtonStyle}
+                  onClick={() => { window.top.location.href = getBillingHref(plan); }}
                 >
                   Switch to this plan
-                </a>
+                </button>
               )}
             </div>
           );

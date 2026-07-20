@@ -135,6 +135,9 @@ export async function createAccountForShop(shopDomain, { email, password, userna
     create: { shopDomain, vaultdAccountId: account.id },
     update: { vaultdAccountId: account.id },
   });
+
+  if (email) sendWelcomeEmail(email).catch(() => {});
+
   return { account: await getAccountForShop(shopDomain) };
 }
 

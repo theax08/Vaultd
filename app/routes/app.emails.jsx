@@ -1,6 +1,7 @@
 // app/routes/app.emails.jsx
 
-import { useLoaderData, useActionData, useSubmit } from "react-router";
+import { useLoaderData, useActionData, useSubmit, Link } from "react-router";
+import { PLAN_ORDER } from "../vaultd-plans";
 import { useState, useEffect } from "react";
 import {
   pagePopStyle,
@@ -128,8 +129,16 @@ export const loader = async ({ request }) => {
     select: { externalId: true, name: true },
   });
 
+  let plan = null;
+  try {
+    const { getAccountForShop } = await import("../vaultd-account.server");
+    const account = await getAccountForShop(shopDomain);
+    plan = account?.plan ?? null;
+  } catch {}
+
   return {
     defaultShopName,
+    plan,
     tabs,
     drops,
     automationsByType: {
@@ -241,8 +250,37 @@ export const action = async ({ request }) => {
 // ==========================================
 // CLIENT: UI – Page Emails
 // ==========================================
+// Plan minimum par onglet : waitlist = GROWTH+, live/ended = PRO+
+const TAB_MIN_PLAN = { waitlist: "GROWTH", live: "PRO", ended: "PRO" };
+
+function isTabLocked(tabId, plan) {
+  const minPlan = TAB_MIN_PLAN[tabId] ?? "PRO";
+  const planIdx = PLAN_ORDER.indexOf(plan);
+  const minIdx = PLAN_ORDER.indexOf(minPlan);
+  return planIdx < minIdx; // -1 si plan null → toujours locked
+}
+
+function LockedTabMessage({ planName }) {
+  return (
+    <div style={{ marginTop: 40, textAlign: "center", padding: "40px 20px" }}>
+      <div style={{ fontSize: 15, fontWeight: 700, color: "#1a1a1a", marginBottom: 8 }}>
+        Available on the {planName} plan
+      </div>
+      <div style={{ fontSize: 13, color: "#6d7175", marginBottom: 20 }}>
+        Upgrade to unlock automated emails for drop events.
+      </div>
+      <Link
+        to="/app/plans"
+        style={{ ...primaryButtonStyle, display: "inline-block", textDecoration: "none" }}
+      >
+        View plans →
+      </Link>
+    </div>
+  );
+}
+
 export default function EmailsPage() {
-  const { defaultShopName, tabs, drops, automationsByType } = useLoaderData();
+  const { defaultShopName, plan, tabs, drops, automationsByType } = useLoaderData();
   const actionData = useActionData();
   const submit = useSubmit();
 
@@ -635,29 +673,39 @@ export default function EmailsPage() {
               marginTop: "24px",
             }}
           >
-            {tabs.map((tab) => (
-              <div
-                key={tab.id}
-                onClick={() => setSelectedTabId(tab.id)}
-                style={{
-                  padding: "12px 16px",
-                  cursor: "pointer",
-                  fontSize: "14px",
-                  fontWeight: selectedTabId === tab.id ? "600" : "400",
-                  color:
-                    selectedTabId === tab.id
+            {tabs.map((tab) => {
+              const locked = isTabLocked(tab.id, plan);
+              const isActive = selectedTabId === tab.id;
+              return (
+                <div
+                  key={tab.id}
+                  onClick={() => setSelectedTabId(tab.id)}
+                  style={{
+                    padding: "12px 16px",
+                    cursor: "pointer",
+                    fontSize: "14px",
+                    fontWeight: isActive ? "600" : "400",
+                    color: locked
+                      ? "#C4C4C4"
+                      : isActive
                       ? "var(--vaultd-accent, #202223)"
                       : "#6D7175",
-                  borderBottom:
-                    selectedTabId === tab.id
+                    borderBottom: isActive
                       ? "3px solid var(--vaultd-accent, #000000)"
                       : "3px solid transparent",
-                  transition: "all 0.15s ease",
-                }}
-              >
-                {tab.label}
-              </div>
-            ))}
+                    transition: "all 0.15s ease",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 5,
+                  }}
+                >
+                  {tab.label}
+                  {locked && (
+                    <span style={{ fontSize: 10, color: "#C4C4C4" }}>●</span>
+                  )}
+                </div>
+              );
+            })}
           </div>
 
           {/* ===== CONTENUS ===== */}
@@ -705,47 +753,55 @@ export default function EmailsPage() {
           )}
 
           {currentTab.id === "live" && (
-            <div style={{ marginTop: "16px" }}>
-              <AutomationCard
-                type={TYPES.DROP_LIVE}
-                brandName={brandName}
-                mainColor={mainColor}
-                dropExternalId={dropExternalId}
-                automation={automationsByType[TYPES.DROP_LIVE]}
-                subjects={subjects}
-                bodies={bodies}
-                config={configByType[TYPES.DROP_LIVE]}
-                onSubjectChange={handleSubjectChange}
-                onBodyChange={handleBodyChange}
-                onSave={handleSave}
-                isConnected={isConnected}
-                isSaving={isSaving}
-                ctaUrl={ctaUrls[TYPES.DROP_LIVE]}
-                onCtaUrlChange={handleCtaUrlChange}
-              />
-            </div>
+            isTabLocked("live", plan) ? (
+              <LockedTabMessage planName="Pro" />
+            ) : (
+              <div style={{ marginTop: "16px" }}>
+                <AutomationCard
+                  type={TYPES.DROP_LIVE}
+                  brandName={brandName}
+                  mainColor={mainColor}
+                  dropExternalId={dropExternalId}
+                  automation={automationsByType[TYPES.DROP_LIVE]}
+                  subjects={subjects}
+                  bodies={bodies}
+                  config={configByType[TYPES.DROP_LIVE]}
+                  onSubjectChange={handleSubjectChange}
+                  onBodyChange={handleBodyChange}
+                  onSave={handleSave}
+                  isConnected={isConnected}
+                  isSaving={isSaving}
+                  ctaUrl={ctaUrls[TYPES.DROP_LIVE]}
+                  onCtaUrlChange={handleCtaUrlChange}
+                />
+              </div>
+            )
           )}
 
           {currentTab.id === "ended" && (
-            <div style={{ marginTop: "16px" }}>
-              <AutomationCard
-                type={TYPES.DROP_ENDED}
-                brandName={brandName}
-                mainColor={mainColor}
-                dropExternalId={dropExternalId}
-                automation={automationsByType[TYPES.DROP_ENDED]}
-                subjects={subjects}
-                bodies={bodies}
-                config={configByType[TYPES.DROP_ENDED]}
-                onSubjectChange={handleSubjectChange}
-                onBodyChange={handleBodyChange}
-                onSave={handleSave}
-                isConnected={isConnected}
-                isSaving={isSaving}
-                ctaUrl={ctaUrls[TYPES.DROP_ENDED]}
-                onCtaUrlChange={handleCtaUrlChange}
-              />
-            </div>
+            isTabLocked("ended", plan) ? (
+              <LockedTabMessage planName="Pro" />
+            ) : (
+              <div style={{ marginTop: "16px" }}>
+                <AutomationCard
+                  type={TYPES.DROP_ENDED}
+                  brandName={brandName}
+                  mainColor={mainColor}
+                  dropExternalId={dropExternalId}
+                  automation={automationsByType[TYPES.DROP_ENDED]}
+                  subjects={subjects}
+                  bodies={bodies}
+                  config={configByType[TYPES.DROP_ENDED]}
+                  onSubjectChange={handleSubjectChange}
+                  onBodyChange={handleBodyChange}
+                  onSave={handleSave}
+                  isConnected={isConnected}
+                  isSaving={isSaving}
+                  ctaUrl={ctaUrls[TYPES.DROP_ENDED]}
+                  onCtaUrlChange={handleCtaUrlChange}
+                />
+              </div>
+            )
           )}
       </div>
     </div>

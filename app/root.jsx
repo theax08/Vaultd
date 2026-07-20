@@ -15,7 +15,7 @@ export default function App() {
         <Links />
         <style>{`body { margin: 0; padding: 0; }`}</style>
       </head>
-      <body>
+      <body suppressHydrationWarning>
         <Outlet />
         <ScrollRestoration />
         <Scripts />
