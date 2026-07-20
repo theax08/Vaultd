@@ -1,0 +1,308 @@
+{%- style -%}
+  .social-proof-block-{{ block.id }} {
+    display: block;
+    width: 100%;
+  }
+
+  .social-proof-section-{{ block.id }} {
+    width: 100%;
+    padding: 72px 40px;
+    box-sizing: border-box;
+    text-align: center;
+  }
+
+  .social-proof-card-{{ block.id }} {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 560px;
+    margin: 0 auto;
+    text-align: center;
+  }
+
+  .social-proof-card-{{ block.id }}.is-linked {
+    cursor: pointer;
+  }
+
+  .social-proof-card-{{ block.id }}[hidden] {
+    display: none;
+  }
+
+  /* Design 1: Simple text */
+  .sp-count-{{ block.id }} {
+    font-size: 48px;
+    font-weight: 800;
+    line-height: 1.1;
+    margin: 0;
+    color: rgb(var(--color-foreground));
+  }
+
+  .sp-count-label-{{ block.id }} {
+    margin: 6px 0 0 0;
+    font-size: 13px;
+    opacity: 0.7;
+  }
+
+  /* Design 2: Avatar stack */
+  .sp-avatars-{{ block.id }} {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 12px;
+  }
+
+  .sp-avatar-{{ block.id }} {
+    width: 48px;
+    height: 48px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: 700;
+    color: #ffffff;
+    border: 2px solid rgb(var(--color-background));
+    margin-left: -12px;
+  }
+  .sp-avatar-{{ block.id }}:first-child { margin-left: 0; }
+
+  .sp-avatar-more-{{ block.id }} {
+    margin-left: 12px;
+    font-size: 16px;
+    opacity: 0.65;
+  }
+
+  .sp-avatars-label-{{ block.id }} {
+    margin: 0 0 8px 0;
+    font-size: 16px;
+    opacity: 0.7;
+  }
+
+  .sp-avatars-count-{{ block.id }} {
+    margin: 0;
+    font-size: 48px;
+    font-weight: 800;
+    line-height: 1.1;
+  }
+
+  /* Design 3: Progress bar (limited waitlist) */
+  .sp-progress-track-{{ block.id }} {
+    width: 100%;
+    height: 12px;
+    border-radius: 999px;
+    background: rgba(var(--color-foreground), 0.1);
+    overflow: hidden;
+    margin-bottom: 20px;
+  }
+
+  .sp-progress-fill-{{ block.id }} {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #6d5bd0, #8b3fd1);
+    width: 0%;
+    transition: width 0.4s ease;
+  }
+
+  .sp-progress-row-{{ block.id }} {
+    display: flex;
+    justify-content: space-between;
+    font-size: 18px;
+    margin-bottom: 8px;
+  }
+
+  .sp-progress-spots-{{ block.id }} {
+    margin: 10px 0 0 0;
+    font-size: 15px;
+    opacity: 0.6;
+  }
+{%- endstyle -%}
+
+<div class="social-proof-block social-proof-block-{{ block.id }}">
+  <div class="social-proof-section-{{ block.id }}">
+    <div
+      id="social-proof-card-{{ block.id }}"
+      class="social-proof-card-{{ block.id }} {% if block.settings.link_to_waitlist %}is-linked{% endif %}"
+      hidden
+    >
+      {% if block.settings.design == "simple" %}
+        <p class="sp-count-{{ block.id }}" data-sp-count>0</p>
+        <p class="sp-count-label-{{ block.id }}">{{ block.settings.simple_label }}</p>
+
+      {% elsif block.settings.design == "avatars" %}
+        <div class="sp-avatars-{{ block.id }}" data-sp-avatars></div>
+        <p class="sp-avatars-label-{{ block.id }}">{{ block.settings.avatars_label }}</p>
+        <p class="sp-avatars-count-{{ block.id }}"><span data-sp-count>0</span> in queue</p>
+
+      {% else %}
+        <div class="sp-progress-track-{{ block.id }}">
+          <div class="sp-progress-fill-{{ block.id }}" data-sp-progress-fill></div>
+        </div>
+        <div class="sp-progress-row-{{ block.id }}">
+          <span>{{ block.settings.progress_capacity_label }}</span>
+          <strong data-sp-capacity>0%</strong>
+        </div>
+        <div class="sp-progress-row-{{ block.id }}">
+          <span>{{ block.settings.progress_total_label }}</span>
+          <strong><span data-sp-count>0</span> people</strong>
+        </div>
+        <p class="sp-progress-spots-{{ block.id }}" data-sp-spots></p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<script>
+  (function() {
+    const id = '{{ block.id }}';
+    const card = document.getElementById('social-proof-card-' + id);
+    if (!card) return;
+
+    const design = '{{ block.settings.design }}';
+    const staticDropId = '{{ block.settings.drop_id | escape }}';
+    const linkToWaitlist = {{ block.settings.link_to_waitlist | json }};
+    const pollMs = 20000;
+
+    const countEls = card.querySelectorAll('[data-sp-count]');
+    const avatarsEl = card.querySelector('[data-sp-avatars]');
+    const fillEl = card.querySelector('[data-sp-progress-fill]');
+    const capacityEl = card.querySelector('[data-sp-capacity]');
+    const spotsEl = card.querySelector('[data-sp-spots]');
+
+    const avatarColors = ['#8b5cf6', '#ec4899', '#06b6d4', '#22c55e', '#f97316', '#ef4444'];
+
+    function renderAvatars(initials) {
+      if (!avatarsEl) return;
+      avatarsEl.innerHTML = '';
+      initials.forEach(function(letter, i) {
+        const span = document.createElement('span');
+        span.className = 'sp-avatar-{{ block.id }}';
+        span.style.background = avatarColors[i % avatarColors.length];
+        span.textContent = letter;
+        avatarsEl.appendChild(span);
+      });
+    }
+
+    function applyStats(data) {
+      if (!data || !data.drop) {
+        card.hidden = true;
+        return;
+      }
+      card.hidden = false;
+
+      countEls.forEach(function(el) {
+        el.textContent = (data.waitlistCount || 0).toLocaleString();
+      });
+
+      if (design === 'avatars') {
+        renderAvatars(data.recentInitials || []);
+        const more = Math.max(0, (data.waitlistCount || 0) - (data.recentInitials || []).length);
+        if (more > 0 && avatarsEl) {
+          const moreSpan = document.createElement('span');
+          moreSpan.className = 'sp-avatar-more-{{ block.id }}';
+          moreSpan.textContent = '+' + more.toLocaleString();
+          avatarsEl.appendChild(moreSpan);
+        }
+      }
+
+      if (design === 'progress') {
+        if (data.capacityPct == null) {
+          // Pas de limite de waitlist configuree sur ce drop : la barre n'a pas de sens.
+          card.hidden = true;
+          return;
+        }
+        if (fillEl) fillEl.style.width = data.capacityPct + '%';
+        if (capacityEl) capacityEl.textContent = data.capacityPct + '%';
+        if (spotsEl) spotsEl.textContent = 'Only ' + (data.spotsLeft || 0).toLocaleString() + ' spots left';
+      }
+    }
+
+    async function fetchStats() {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const shop = params.get('shop') || (window.Shopify && window.Shopify.shop) || '';
+        const qs = new URLSearchParams();
+        if (staticDropId) qs.set('dropId', staticDropId);
+        if (shop) qs.set('shop', shop);
+        const res = await fetch('/apps/hype/api/drop-status?' + qs.toString());
+        if (!res.ok) {
+          card.hidden = true;
+          return;
+        }
+        const data = await res.json();
+        applyStats(data);
+      } catch (e) {
+        console.error('[social-proof] failed to load stats', e);
+        card.hidden = true;
+      }
+    }
+
+    if (linkToWaitlist) {
+      card.addEventListener('click', function() {
+        const target = document.querySelector('[class*="waitlist-block-"]');
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          const input = target.querySelector('input[type="email"]');
+          if (input) setTimeout(function() { input.focus(); }, 400);
+        }
+      });
+    }
+
+    fetchStats();
+    setInterval(fetchStats, pollMs);
+  })();
+</script>
+
+{% schema %}
+{
+  "name": "Social Proof Widget",
+  "target": "section",
+  "settings": [
+    {
+      "type": "text",
+      "id": "drop_id",
+      "label": "Drop ID",
+      "info": "Copy the Drop ID from the Drops page in Vaultd. Leave empty to automatically use the live or next scheduled drop."
+    },
+    {
+      "type": "select",
+      "id": "design",
+      "label": "Design",
+      "options": [
+        { "value": "simple", "label": "Simple text" },
+        { "value": "avatars", "label": "Avatar stack" },
+        { "value": "progress", "label": "Progress bar (limited waitlist drops)" }
+      ],
+      "default": "simple"
+    },
+    {
+      "type": "checkbox",
+      "id": "link_to_waitlist",
+      "label": "Clicking the widget scrolls to the waitlist form",
+      "default": true
+    },
+    {
+      "type": "text",
+      "id": "simple_label",
+      "label": "Label (simple text design)",
+      "default": "people waiting for this drop"
+    },
+    {
+      "type": "text",
+      "id": "avatars_label",
+      "label": "Label (avatar stack design)",
+      "default": "People are waiting"
+    },
+    {
+      "type": "text",
+      "id": "progress_capacity_label",
+      "label": "Label (progress bar design)",
+      "default": "Waitlist capacity"
+    },
+    {
+      "type": "text",
+      "id": "progress_total_label",
+      "label": "Total label (progress bar design)",
+      "default": "Total waiting"
+    }
+  ]
+}
+{% endschema %}

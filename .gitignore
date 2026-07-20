@@ -4,3 +4,12 @@ build/
 .env.*
 .DS_Store
 npm-debug.log*
+.react-router/
+prisma/*.sqlite
+prisma/*.sqlite-journal
+
+# Contains local secrets (DB passwords, admin API secrets) baked into
+# permission allow-lists — never commit.
+.claude/
+.cursor/
+.gemini/

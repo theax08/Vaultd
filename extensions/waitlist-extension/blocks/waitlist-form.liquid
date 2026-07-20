@@ -1,0 +1,496 @@
+{%- style -%}
+  .waitlist-block-{{ block.id }} {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .waitlist-section-{{ block.id }} {
+    width: 100%;
+    padding: 28px 40px;
+    box-sizing: border-box;
+  }
+
+  .waitlist-inner-{{ block.id }} {
+    display: flex;
+    align-items: center;
+    gap: 48px;
+    max-width: 960px;
+    margin: 0 auto;
+  }
+
+  .waitlist-text-col-{{ block.id }} {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .waitlist-heading-{{ block.id }} {
+    display: block;
+    margin: 0 0 6px 0;
+    font-size: 1.8rem;
+    font-weight: 700;
+    line-height: 1.2;
+    word-break: break-word;
+    color: rgb(var(--color-foreground, 0,0,0));
+    font-family: inherit;
+  }
+
+  .waitlist-subheading-{{ block.id }} {
+    display: block;
+    margin: 0;
+    font-size: 1.3rem;
+    color: rgba(var(--color-foreground, 0,0,0), 0.65);
+    font-family: inherit;
+  }
+
+  .waitlist-form-col-{{ block.id }} {
+    flex: 0 0 560px;
+    max-width: 560px;
+    width: 100%;
+  }
+
+  .waitlist-input-row-{{ block.id }} {
+    position: relative;
+    width: 100%;
+  }
+
+  .waitlist-email-{{ block.id }} {
+    width: 100%;
+    padding: 10px 52px 10px 18px;
+    border: 2px solid #c2c2c2;
+    border-radius: 999px;
+    font-size: 1.4rem;
+    font-family: inherit;
+    background: transparent;
+    color: rgb(var(--color-foreground, 0,0,0));
+    box-sizing: border-box;
+    outline: none;
+    -webkit-appearance: none;
+  }
+
+  .waitlist-email-{{ block.id }}::placeholder {
+    color: rgba(var(--color-foreground, 0,0,0), 0.45);
+  }
+
+  .waitlist-email-{{ block.id }}:focus {
+    border-color: #888888;
+  }
+
+  .waitlist-submit-{{ block.id }} {
+    position: absolute;
+    right: 7px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgb(var(--color-foreground, 0,0,0));
+    color: rgb(var(--color-background, 255,255,255));
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: opacity 0.15s ease;
+  }
+
+  .waitlist-submit-{{ block.id }}:hover { opacity: 0.8; }
+
+  .waitlist-submit-{{ block.id }} svg {
+    width: 18px;
+    height: 18px;
+    display: block;
+  }
+
+  #turnstile-container-{{ block.id }} {
+    margin-top: 10px;
+    display: none;
+  }
+{%- endstyle -%}
+
+<div class="waitlist-block waitlist-block-{{ block.id }}">
+  <div class="waitlist-section-{{ block.id }}">
+    <div class="waitlist-inner-{{ block.id }}">
+
+      <div class="waitlist-text-col-{{ block.id }}">
+        <h2 class="waitlist-heading-{{ block.id }}">
+          {{ block.settings.heading }}<span id="dynamic-drop-name-{{ block.id }}"></span>
+        </h2>
+        <p class="waitlist-subheading-{{ block.id }}">{{ block.settings.subtext }}</p>
+      </div>
+
+      <div class="waitlist-form-col-{{ block.id }}">
+        <form id="hype-waitlist-form-{{ block.id }}">
+          <input type="hidden" id="active-drop-id-{{ block.id }}" name="dropId">
+          <input type="hidden" id="referral-code-{{ block.id }}" name="ref">
+          <input type="hidden" id="rendered-at-{{ block.id }}" name="rendered_at">
+
+          <div style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden;" aria-hidden="true">
+            <label for="hp-field-{{ block.id }}">Leave this field empty</label>
+            <input type="text" id="hp-field-{{ block.id }}" name="hp_field" tabindex="-1" autocomplete="off">
+          </div>
+
+          <div class="waitlist-input-row-{{ block.id }}">
+            <label for="WaitlistEmailInput-{{ block.id }}" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">
+              {{ block.settings.input_placeholder }}
+            </label>
+            <input
+              id="WaitlistEmailInput-{{ block.id }}"
+              type="email"
+              name="email"
+              class="waitlist-email-{{ block.id }}"
+              placeholder="{{ block.settings.input_placeholder }}"
+              autocorrect="off"
+              autocapitalize="off"
+              autocomplete="email"
+              required
+            >
+            <button type="submit" class="waitlist-submit-{{ block.id }}" aria-label="Sign up">
+              <svg viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M5 10h10m0 0l-4-4m4 4l-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+              </svg>
+            </button>
+          </div>
+
+          <div id="turnstile-container-{{ block.id }}"></div>
+        </form>
+
+        <div id="waitlist-success-{{ block.id }}" class="waitlist-success-{{ block.id }}" style="display:none;">
+          <p class="waitlist-success-position-{{ block.id }}"></p>
+          <div class="waitlist-share-row-{{ block.id }}">
+            <button type="button" class="waitlist-share-copy-{{ block.id }}">Copy invite link</button>
+            <button type="button" class="waitlist-share-toggle-{{ block.id }}">Share</button>
+          </div>
+          <p class="waitlist-share-hint-{{ block.id }}">Friends who join with your link move you up the list.</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<style>
+  .waitlist-success-{{ block.id }} { margin-top: 1.6rem; text-align: center; width: 100%; max-width: 28rem; margin-left: auto; margin-right: auto; }
+  .waitlist-success-position-{{ block.id }} { font-size: 1.6rem; font-weight: 700; margin: 0 0 0.8rem 0; color: rgb(var(--color-foreground)); }
+  .waitlist-share-row-{{ block.id }} { display: flex; gap: 0.8rem; justify-content: center; flex-wrap: wrap; }
+  .waitlist-share-row-{{ block.id }} button,
+  .waitlist-share-row-{{ block.id }} a {
+    font-size: 1.3rem;
+    padding: 0.7rem 1.4rem;
+    border-radius: 999px;
+    border: 1px solid rgba(var(--color-foreground), 0.35);
+    background: transparent;
+    color: rgb(var(--color-foreground));
+    cursor: pointer;
+    text-decoration: none;
+    transition: transform 0.12s ease, opacity 0.12s ease, background-color 0.12s ease;
+  }
+  .waitlist-share-row-{{ block.id }} button:active,
+  .waitlist-share-row-{{ block.id }} a:active {
+    transform: scale(0.96);
+    background-color: rgba(var(--color-foreground), 0.1);
+  }
+  .waitlist-share-hint-{{ block.id }} { margin-top: 1rem; font-size: 1.2rem; opacity: 0.7; }
+</style>
+
+<script>
+  (function() {
+    const id = '{{ block.id }}';
+    const nameEl = document.getElementById('dynamic-drop-name-' + id);
+    const idEl = document.getElementById('active-drop-id-' + id);
+    const refEl = document.getElementById('referral-code-' + id);
+    const renderedAtEl = document.getElementById('rendered-at-' + id);
+    const turnstileContainer = document.getElementById('turnstile-container-' + id);
+    const form = document.getElementById('hype-waitlist-form-' + id);
+    const successEl = document.getElementById('waitlist-success-' + id);
+    const storageKeyFor = (dropId) => 'vaultd_waitlist_' + dropId;
+
+    // Anti-bot : horodatage de rendu (timing check cote serveur) et chargement
+    // conditionnel du challenge Turnstile si le marchand l'a active.
+    if (renderedAtEl) renderedAtEl.value = Date.now();
+
+    (async function loadBotProtection() {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const shop = params.get('shop') || (window.Shopify && window.Shopify.shop) || '';
+        const qs = new URLSearchParams();
+        if (shop) qs.set('shop', shop);
+        const res = await fetch('/apps/hype/api/bot-protection-settings?' + qs.toString());
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data.enabled || !data.siteKey || !turnstileContainer) return;
+
+        turnstileContainer.style.display = 'block';
+
+        function renderWidget() {
+          if (window.turnstile && turnstileContainer.childElementCount === 0) {
+            window.turnstile.render(turnstileContainer, { sitekey: data.siteKey });
+          }
+        }
+
+        if (window.turnstile) {
+          renderWidget();
+        } else {
+          const script = document.createElement('script');
+          script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
+          script.async = true;
+          script.defer = true;
+          script.onload = renderWidget;
+          document.head.appendChild(script);
+        }
+      } catch (e) {
+        console.error('[waitlist] failed to load bot protection settings', e);
+      }
+    })();
+
+    // Code de parrainage : capture du parametre ?ref= depuis le lien partage
+    const refFromUrl = new URLSearchParams(window.location.search).get('ref');
+    if (refFromUrl && refEl) refEl.value = refFromUrl;
+
+    function flashFeedback(btn, label, resetLabel) {
+      if (!btn) return;
+      const original = resetLabel !== undefined ? resetLabel : btn.textContent;
+      btn.textContent = label;
+      btn.style.opacity = '0.6';
+      setTimeout(function() {
+        btn.textContent = original;
+        btn.style.opacity = '1';
+      }, 1800);
+    }
+
+    function copyToClipboard(text) {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        return navigator.clipboard.writeText(text);
+      }
+      // Fallback for insecure/older contexts
+      return new Promise(function(resolve, reject) {
+        try {
+          const textarea = document.createElement('textarea');
+          textarea.value = text;
+          textarea.style.position = 'fixed';
+          textarea.style.opacity = '0';
+          document.body.appendChild(textarea);
+          textarea.focus();
+          textarea.select();
+          const ok = document.execCommand('copy');
+          document.body.removeChild(textarea);
+          ok ? resolve() : reject(new Error('execCommand copy failed'));
+        } catch (err) {
+          reject(err);
+        }
+      });
+    }
+
+    function wireShareButtons(referralCode) {
+      if (!successEl) return;
+
+      // Le lien de partage marche meme sans code de parrainage (referral
+      // desactive sur ce drop) : on partage juste la page, sans ?ref=.
+      const shareUrl = new URL(window.location.href);
+      if (referralCode) {
+        shareUrl.searchParams.set('ref', referralCode);
+      } else {
+        shareUrl.searchParams.delete('ref');
+      }
+      const shareUrlStr = shareUrl.toString();
+      const shareText = "I just joined the waitlist — join me:";
+
+      const copyBtn = successEl.querySelector('.waitlist-share-copy-' + id);
+      if (copyBtn && !copyBtn.dataset.wired) {
+        copyBtn.dataset.wired = '1';
+        copyBtn.addEventListener('click', function() {
+          copyToClipboard(shareUrlStr)
+            .then(function() { flashFeedback(copyBtn, 'Copied!', 'Copy invite link'); })
+            .catch(function() { flashFeedback(copyBtn, 'Could not copy', 'Copy invite link'); });
+        });
+      }
+
+      const shareBtn = successEl.querySelector('.waitlist-share-toggle-' + id);
+      if (shareBtn && !shareBtn.dataset.wired) {
+        shareBtn.dataset.wired = '1';
+        shareBtn.addEventListener('click', function() {
+          // Pas d'URL de partage web universelle : sur mobile, le partage
+          // natif de l'OS (qui inclut Instagram Story/DM, Messages, etc.)
+          // est le seul vrai selecteur ; sur desktop sans support on
+          // retombe sur copier-coller.
+          if (navigator.share) {
+            navigator.share({ text: shareText, url: shareUrlStr }).catch(function() {});
+          } else {
+            copyToClipboard(shareUrlStr)
+              .then(function() { flashFeedback(shareBtn, 'Link copied!', 'Share'); })
+              .catch(function() { flashFeedback(shareBtn, 'Could not copy', 'Share'); });
+          }
+        });
+      }
+    }
+
+    function showSuccess(rank, referralCode) {
+      if (form) form.style.display = 'none';
+      const headingEl = document.querySelector('.waitlist-heading-' + id);
+      const subheadingEl = document.querySelector('.waitlist-subheading-' + id);
+      if (headingEl) headingEl.style.display = 'none';
+      if (subheadingEl) subheadingEl.style.display = 'none';
+      if (!successEl) return;
+      successEl.style.display = 'block';
+      const positionEl = successEl.querySelector('.waitlist-success-position-' + id);
+      if (positionEl) positionEl.textContent = "You're #" + rank + ' on the list.';
+      wireShareButtons(referralCode);
+    }
+
+    function restoreFromStorage(dropId) {
+      if (!dropId) return false;
+      try {
+        const raw = localStorage.getItem(storageKeyFor(dropId));
+        if (!raw) return false;
+        const saved = JSON.parse(raw);
+        if (!saved || !saved.rank) return false;
+        showSuccess(saved.rank, saved.referralCode);
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    // Drop ID from settings or dynamic source
+    const staticDropId = '{{ block.settings.drop_id | escape }}';
+
+    // Traffic sources : on detecte d'ou vient le visiteur (lien email
+    // Vaultd, reseau social via le referrer, ou autre) et on le rapporte
+    // une seule fois par visite/drop pour ne pas fausser les compteurs en
+    // rechargeant la page.
+    function detectTrafficSource() {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('vaultd_src') === 'vaultd_email') return 'vaultd_email';
+
+      const ref = (document.referrer || '').toLowerCase();
+      if (!ref) return 'other';
+      if (ref.indexOf('instagram.com') !== -1) return 'instagram';
+      if (ref.indexOf('tiktok.com') !== -1) return 'tiktok';
+      if (ref.indexOf('facebook.com') !== -1 || ref.indexOf('fb.com') !== -1) return 'facebook';
+      if (ref.indexOf('twitter.com') !== -1 || ref.indexOf('x.com') !== -1 || ref.indexOf('t.co') !== -1) return 'twitter';
+      return 'other';
+    }
+
+    function reportTrafficSource(dropId) {
+      if (!dropId) return;
+      // Ignore les chargements dans l'editeur de theme (apercu live du
+      // marchand) : ce n'est pas un vrai visiteur, juste un reload pendant
+      // l'edition, et ca faussait les compteurs "other".
+      if (window.Shopify && window.Shopify.designMode) return;
+      const flagKey = 'vaultd_traffic_reported_' + dropId;
+      try {
+        if (sessionStorage.getItem(flagKey)) return;
+        sessionStorage.setItem(flagKey, '1');
+      } catch (e) {}
+
+      const fd = new FormData();
+      fd.set('dropId', dropId);
+      fd.set('source', detectTrafficSource());
+      fetch('/apps/hype/api/track-traffic', { method: 'POST', body: fd }).catch(function() {});
+    }
+
+    if (staticDropId && idEl) {
+      // Use explicit drop ID from settings
+      idEl.value = staticDropId;
+      restoreFromStorage(staticDropId);
+      reportTrafficSource(staticDropId);
+    } else {
+      // Fallback to your API to resolve the active drop
+      (async function loadActiveDrop() {
+        try {
+          const res = await fetch('/apps/hype/active-drop');
+          if (!res.ok) return;
+          const data = await res.json();
+          if (data && data.drop) {
+            if (nameEl) nameEl.textContent = ' for ' + data.drop.name;
+            if (idEl) idEl.value = data.drop.id;
+            restoreFromStorage(data.drop.id);
+            reportTrafficSource(data.drop.id);
+          }
+        } catch (e) {
+          console.error('Error loading active drop:', e);
+        }
+      })();
+    }
+
+    // Waitlist form submission
+    if (form) {
+  form.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const fd = new FormData(form);
+    fd.append('intent', 'join');
+    const dropId = fd.get('dropId');
+
+    try {
+      const res = await fetch('/apps/hype/api/waitlist', {
+      method: 'POST',
+      body: fd,
+      });
+
+      const text = await res.text();
+      let result;
+      try {
+        result = JSON.parse(text);
+      } catch (parseError) {
+        console.error('[waitlist] failed to parse JSON', parseError);
+        alert('Waitlist error: invalid server response. See console.');
+        return;
+      }
+
+      if (result && result.success) {
+        if (dropId) {
+          try {
+            localStorage.setItem(storageKeyFor(dropId), JSON.stringify({
+              rank: result.rank,
+              referralCode: result.referralCode || null,
+              email: fd.get('email'),
+            }));
+          } catch (e) {}
+        }
+        showSuccess(result.rank, result.referralCode);
+        form.reset();
+      } else {
+        alert('Something went wrong: ' + (result && result.error ? result.error : 'Unknown error'));
+      }
+    } catch (err) {
+      console.error('[waitlist] network or JS error when submitting waitlist:', err);
+      alert('An error occurred. Please try again later.');
+    }
+  });
+}
+  })();
+</script>
+
+{% schema %}
+{
+  "name": "Waitlist Widget",
+  "target": "section",
+  "settings": [
+    {
+      "type": "text",
+      "id": "heading",
+      "label": "Heading",
+      "default": "Join the waitlist"
+    },
+    {
+      "type": "text",
+      "id": "subtext",
+      "label": "Subheading",
+      "default": "Be the first to know the next drop."
+    },
+    {
+      "type": "text",
+      "id": "input_placeholder",
+      "label": "Email field placeholder",
+      "default": "Email address"
+    },
+    {
+      "type": "text",
+      "id": "drop_id",
+      "label": "Drop ID",
+      "info": "Copy the Drop ID from the Drops page in Vaultd."
+    }
+  ]
+}
+{% endschema %}
