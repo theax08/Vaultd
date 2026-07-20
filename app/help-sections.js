@@ -9,6 +9,7 @@ export const SECTIONS = [
     minPlan: "GROWTH",
     intro: "Let customers join a waitlist for a drop and track their position in real time.",
     tips: [
+      "Every signup gets an instant confirmation email — customize it from the Emails page, in the Waitlist Email Rank tab. It's included on every plan.",
       "Share your drop's waitlist link on social media before the drop goes live to build a queue.",
       "Each entry gets a referral link — sharing it moves people up the list, which naturally drives more signups.",
       "Referral links are a merchant-side feature: customers have no way to know whether a referral program is active just from the widget. Always announce it explicitly in your drop marketing — email, caption, or story — so customers actually know to share their link.",
@@ -57,8 +58,9 @@ export const SECTIONS = [
     key: "automated_emails",
     title: "Automated customer emails",
     minPlan: "PRO",
-    intro: "Waitlist confirmation, rank update, drop live and drop ended emails sent automatically.",
+    intro: "Rank update, drop-is-live and drop-ended emails sent automatically — on top of the instant waitlist confirmation email included on every plan.",
     tips: [
+      "The instant waitlist confirmation email is included starting at Growth. Pro unlocks the rest: rank-update, drop-is-live, and drop-ended.",
       "Link each automation to a specific drop from the Emails page — it only fires for that drop.",
       "Customize the brand color and logo so emails match your store, not a generic template.",
       "Rank update emails are a strong re-engagement tool: they remind people they're close to getting in.",

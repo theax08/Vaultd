@@ -56,27 +56,6 @@ function buildTimeBuckets(orders, startTime, endTime, bucketSeconds) {
   return buckets;
 }
 
-// Regroupe les buckets pour ne jamais afficher plus de `maxBars` colonnes
-// (utile pour la granularite 5 sec sur un drop de plusieurs heures).
-function downsampleBuckets(buckets, maxBars) {
-  if (buckets.length <= maxBars) return buckets;
-
-  const groupSize = Math.ceil(buckets.length / maxBars);
-  const grouped = [];
-
-  for (let i = 0; i < buckets.length; i += groupSize) {
-    const slice = buckets.slice(i, i + groupSize);
-    grouped.push({
-      start: slice[0].start,
-      end: slice[slice.length - 1].end,
-      ordersCount: slice.reduce((s, b) => s + b.ordersCount, 0),
-      itemsCount: slice.reduce((s, b) => s + b.itemsCount, 0),
-    });
-  }
-
-  return grouped;
-}
-
 export const loader = async ({ params, request }) => {
   const [{ authenticate }, dbModule] = await Promise.all([
     import("../shopify.server"),
@@ -259,14 +238,27 @@ export const loader = async ({ params, request }) => {
   };
 
   // ==============
-  // HEATMAP (5 min / 5 sec)
+  // HEATMAP — granularite adaptative
   // ==============
+  // Un pas fixe (5s ou 5min) ne convient pas a tous les drops : un drop
+  // sold-out en 10 minutes noye les 5min-buckets (2 barres), un drop qui dure
+  // 6h noie les 5s-buckets (4300+ barres). On calcule plutot une taille de
+  // bucket qui vise ~40 barres, quelle que soit la duree reelle du drop.
 
   const startTime = drop.startTime ?? (orders[0]?.createdAt ?? null);
   const endTime = drop.endTime ?? (orders[orders.length - 1]?.createdAt ?? null);
 
-  const heatmap5m = buildTimeBuckets(orders, startTime, endTime, 5 * 60); // 5 minutes
-  const heatmap5s = buildTimeBuckets(orders, startTime, endTime, 5);      // 5 secondes
+  const TARGET_BARS = 40;
+  const MIN_BUCKET_SECONDS = 10;
+  const MAX_BUCKET_SECONDS = 3600; // 1h, pour les drops multi-jours
+  const heatmapDurationSeconds =
+    startTime && endTime ? Math.max(1, (endTime.getTime() - startTime.getTime()) / 1000) : 0;
+  const adaptiveBucketSeconds = Math.min(
+    MAX_BUCKET_SECONDS,
+    Math.max(MIN_BUCKET_SECONDS, Math.ceil(heatmapDurationSeconds / TARGET_BARS))
+  );
+
+  const heatmap = buildTimeBuckets(orders, startTime, endTime, adaptiveBucketSeconds);
 
   // ==============
   // MOST DEMANDED — classement réel par vitesse d'écoulement
@@ -323,8 +315,8 @@ export const loader = async ({ params, request }) => {
     },
     funnel,
     heatmap: {
-      buckets5m: heatmap5m,
-      buckets5s: heatmap5s,
+      buckets: heatmap,
+      bucketSeconds: adaptiveBucketSeconds,
     },
     productRanking,
   };
@@ -359,10 +351,14 @@ export default function DropDetailPage() {
 
   const { h, m, s } = duration;
 
-  const [granularity, setGranularity] = useState("5m");
-  const rawBuckets = granularity === "5m" ? heatmap.buckets5m : heatmap.buckets5s;
-  const bars = downsampleBuckets(rawBuckets, granularity === "5s" ? 240 : 60);
+  const bars = heatmap.buckets;
   const maxItems = Math.max(1, ...bars.map((b) => b.itemsCount));
+  const bucketLabel =
+    heatmap.bucketSeconds < 60
+      ? `${heatmap.bucketSeconds}s`
+      : heatmap.bucketSeconds < 3600
+      ? `${Math.round(heatmap.bucketSeconds / 60)}min`
+      : `${Math.round(heatmap.bucketSeconds / 3600)}h`;
 
   const tierColor = (itemsCount) => {
     if (itemsCount === 0) return "#ececec";
@@ -768,28 +764,10 @@ export default function DropDetailPage() {
       >
         {/* HEATMAP */}
         <div style={{ ...card, padding: 16 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
             <div style={cardLabel}>Hourly heatmap — sales volume</div>
-            <div style={{ display: "flex", gap: 6 }}>
-              {["5m", "5s"].map((g) => (
-                <button
-                  key={g}
-                  type="button"
-                  onClick={() => setGranularity(g)}
-                  style={{
-                    padding: "5px 12px",
-                    borderRadius: 7,
-                    border: "1px solid #c9cccf",
-                    background: granularity === g ? "#1a1a1a" : "#ffffff",
-                    color: granularity === g ? "#ffffff" : "#303030",
-                    fontSize: 12.5,
-                    fontWeight: 600,
-                    cursor: "pointer",
-                  }}
-                >
-                  {g === "5m" ? "5 min" : "5 sec"}
-                </button>
-              ))}
+            <div style={{ fontSize: 11.5, color: "#919191" }}>
+              ~{bucketLabel} per bar
             </div>
           </div>
 
@@ -800,37 +778,62 @@ export default function DropDetailPage() {
           ) : (
             <>
               <div style={{ overflowX: "auto" }}>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "flex-end",
-                    gap: 3,
-                    height: 150,
-                    minWidth: Math.max(400, bars.length * 8),
-                  }}
-                >
-                  {bars.map((b, i) => (
+                <div style={{ display: "flex", minWidth: Math.max(400, bars.length * 8) }}>
+                  {/* AXE Y */}
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "space-between",
+                      height: 150,
+                      paddingRight: 8,
+                      fontSize: 10,
+                      color: "#a0a0a0",
+                      textAlign: "right",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <span>{maxItems} items</span>
+                    <span>{Math.round(maxItems / 2)}</span>
+                    <span>0</span>
+                  </div>
+
+                  <div style={{ flex: 1, minWidth: 0 }}>
                     <div
-                      key={i}
-                      title={`${b.start.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })} · ${b.itemsCount} items`}
                       style={{
-                        flex: 1,
-                        minWidth: 0,
-                        height: `${Math.max(3, (b.itemsCount / maxItems) * 100)}%`,
-                        background: tierColor(b.itemsCount),
-                        borderRadius: 2,
+                        display: "flex",
+                        alignItems: "flex-end",
+                        gap: 3,
+                        height: 150,
+                        borderLeft: "1px solid #ececec",
+                        borderBottom: "1px solid #d1d1d1",
                       }}
-                    />
-                  ))}
-                </div>
-                <div style={{ display: "flex", gap: 3, marginTop: 6, minWidth: Math.max(400, bars.length * 8) }}>
-                  {bars.map((b, i) => (
-                    <div key={i} style={{ flex: 1, minWidth: 0, textAlign: "center", fontSize: 10, color: "#a0a0a0" }}>
-                      {i % labelEvery === 0
-                        ? b.start.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
-                        : ""}
+                    >
+                      {bars.map((b, i) => (
+                        <div
+                          key={i}
+                          title={`${b.start.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })} · ${b.itemsCount} item${b.itemsCount === 1 ? "" : "s"}`}
+                          style={{
+                            flex: 1,
+                            minWidth: 0,
+                            height: `${Math.max(2, (b.itemsCount / maxItems) * 100)}%`,
+                            background: tierColor(b.itemsCount),
+                            border: b.itemsCount === 0 ? "1px solid #e3e3e3" : "none",
+                            borderRadius: 2,
+                          }}
+                        />
+                      ))}
                     </div>
-                  ))}
+                    <div style={{ display: "flex", gap: 3, marginTop: 6 }}>
+                      {bars.map((b, i) => (
+                        <div key={i} style={{ flex: 1, minWidth: 0, textAlign: "center", fontSize: 10, color: "#a0a0a0" }}>
+                          {i % labelEvery === 0
+                            ? b.start.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
+                            : ""}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
               <div style={{ display: "flex", gap: 14, marginTop: 14, fontSize: 12, color: "#6d7175" }}>

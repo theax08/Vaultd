@@ -5,6 +5,7 @@ import {
   useSubmit,
   useRevalidator,
   useSearchParams,
+  useFetcher,
   Form,
   redirect,
   Link,
@@ -27,7 +28,7 @@ import {
   modalCardStyle,
 } from "../styles/pop-ui";
 import { getAccountForShop } from "../vaultd-account.server";
-import { PLAN_LIMITS, PLAN_FEATURES } from "../vaultd-plans";
+import { PLAN_LIMITS, PLAN_FEATURES, PLAN_ORDER } from "../vaultd-plans";
 
 // ==========================================
 // SERVER: loader – Récupère les drops
@@ -53,7 +54,10 @@ export const loader = async ({ request }) => {
   await runAutoDropLifecycle(shopDomain);
 
   const account = await getAccountForShop(shopDomain);
-  const plan = account?.plan ?? "GROWTH";
+  const plan = PLAN_ORDER.includes(account?.plan) ? account.plan : null;
+  if (!plan) {
+    return redirect("/app/plans");
+  }
   const limits = PLAN_LIMITS[plan];
 
   const startOfMonth = new Date();
@@ -129,6 +133,15 @@ export const action = async ({ request }) => {
 
   const formData = await request.formData();
   const intent = formData.get("intent");
+
+  // Live unit count for the product picker — sums real Shopify inventory for
+  // the currently-selected products so the editor can show/enforce the plan
+  // cap before the merchant submits (create/update caps it again server-side).
+  if (intent === "compute_units") {
+    const productIds = (formData.get("productIds") || "").toString().trim();
+    const totalUnits = await computeTotalInventory(admin, productIds);
+    return { intent, totalUnits };
+  }
 
   // --- TRAITEMENT LOGIQUE : CREATE OU UPDATE ---
   if (intent === "create" || intent === "update") {
@@ -220,7 +233,24 @@ export const action = async ({ request }) => {
     let maxUnits = await computeTotalInventory(admin, productIds);
 
     const account = await getAccountForShop(shopDomain);
-    const plan = account?.plan ?? "GROWTH";
+    const plan = PLAN_ORDER.includes(account?.plan) ? account.plan : null;
+    if (!plan) {
+      return {
+        intent,
+        errors: { name: "No active plan on this account. Choose a plan to create drops." },
+        values: {
+          id: dropId,
+          name,
+          startTime: startTimeRaw,
+          description,
+          productIds,
+          autoLaunch,
+          maxWaitlistSize: maxWaitlistSizeRaw,
+          referralEnabled,
+          referralPointsPerShare,
+        },
+      };
+    }
     const limits = PLAN_LIMITS[plan];
 
     // Le plafond d'unites par drop est une limite du forfait, pas du stock
@@ -483,6 +513,26 @@ export default function DropsPage() {
   // État de la boîte de dialogue de confirmation de suppression
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [dropToDelete, setDropToDelete] = useState(null);
+
+  // Compteur d'unités en temps réel — recalcule le stock Shopify réel des
+  // produits sélectionnés à chaque changement, pour que le marchand voie le
+  // total AVANT de soumettre (le serveur re-plafonne de toute façon à la
+  // création, ceci est juste pour la visibilité).
+  const unitsFetcher = useFetcher();
+  useEffect(() => {
+    if (selectedProducts.length === 0) return;
+    unitsFetcher.submit(
+      {
+        intent: "compute_units",
+        productIds: selectedProducts.map((p) => p.id).join(","),
+      },
+      { method: "post" }
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedProducts]);
+  const selectedUnits = unitsFetcher.data?.intent === "compute_units" ? unitsFetcher.data.totalUnits : null;
+  const isComputingUnits = unitsFetcher.state !== "idle";
+  const willBeCapped = selectedUnits != null && maxUnitsPerDrop != null && selectedUnits > maxUnitsPerDrop;
 
   const handleSelectProducts = async () => {
     const selected = await window.shopify.resourcePicker({
@@ -1207,9 +1257,18 @@ export default function DropsPage() {
                           marginTop: "8px",
                         }}
                       >
-                        <span style={{ fontWeight: 700, color: "#007a5a" }}>
-                          Selected ({selectedProducts.length}) :
-                        </span>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                          <span style={{ fontWeight: 700, color: "#007a5a" }}>
+                            Selected ({selectedProducts.length} product{selectedProducts.length > 1 ? "s" : ""}) :
+                          </span>
+                          <span style={{ fontSize: 12.5, fontWeight: 700, color: willBeCapped ? "#c2410c" : "#202223" }}>
+                            {isComputingUnits
+                              ? "Counting units…"
+                              : selectedUnits != null
+                              ? `${selectedUnits.toLocaleString("en-US")} unit${selectedUnits > 1 ? "s" : ""} in stock`
+                              : null}
+                          </span>
+                        </div>
                         <ul
                           style={{
                             margin: "4px 0 0 0",
@@ -1225,8 +1284,15 @@ export default function DropsPage() {
                       </div>
                     )}
                     {maxUnitsPerDrop != null && (
-                      <p style={{ fontSize: 12, color: "#c2410c", margin: "8px 0 0 0" }}>
-                        Your plan limits this drop to <strong>{maxUnitsPerDrop} units</strong>. The unit count is automatically computed from your selected products' Shopify inventory and capped at {maxUnitsPerDrop}.{" "}
+                      <p style={{ fontSize: 12, color: willBeCapped ? "#c2410c" : "#6d7175", margin: "8px 0 0 0" }}>
+                        {willBeCapped ? (
+                          <>
+                            <strong>Your selection ({selectedUnits.toLocaleString("en-US")} units) exceeds your plan's limit.</strong>{" "}
+                            This drop will be capped at {maxUnitsPerDrop} units when created.{" "}
+                          </>
+                        ) : (
+                          <>Your plan limits this drop to <strong>{maxUnitsPerDrop} units</strong>. {" "}</>
+                        )}
                         <a href="/app/plans" style={{ color: "#1a1a1a", fontWeight: 600 }}>Upgrade to raise this limit →</a>
                       </p>
                     )}

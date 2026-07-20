@@ -238,7 +238,7 @@ export default function SettingsPage() {
     submit(fd, { method: "post" });
   };
 
-  const plan = account?.plan ?? null;
+  const plan = PLAN_ORDER.includes(account?.plan) ? account.plan : null;
   const isElite = plan === "ELITE";
 
   return (
@@ -443,7 +443,16 @@ export default function SettingsPage() {
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
               <span style={{ fontSize: 13, color: "#6d7175" }}>Plan:</span>
-              <span style={pillBadge("neutral")}>{PLAN_SUMMARIES[plan].label}</span>
+              {plan ? (
+                <span style={pillBadge("neutral")}>{PLAN_SUMMARIES[plan].label}</span>
+              ) : (
+                <>
+                  <span style={pillBadge("warning")}>No active plan</span>
+                  <Link to="/app/plans?from=settings" style={{ fontSize: 12.5, color: "#1a1a1a", fontWeight: 600 }}>
+                    Choose a plan →
+                  </Link>
+                </>
+              )}
             </div>
 
             <div style={cardLabel}>LINKED STORES ({account.shops.length})</div>

@@ -65,6 +65,12 @@ export const loader = async ({ request }) => {
     orderBy: { timestamp: "asc" },
   });
 
+  // 5) Stats par produit (pour le board "Top sellers")
+  const productStats = await db.dropProductStats.findMany({
+    where: { dropId: drop.id, shopDomain },
+    orderBy: [{ unitsSold: "desc" }],
+  });
+
   // =========================
   // CALCUL DES KPIs
   // =========================
@@ -112,22 +118,74 @@ export const loader = async ({ request }) => {
   const velocity =
     recentItems > 0 ? recentItems / (windowMs / 1000) : 0;
 
-  // Pic reel de vitesse de vente : on persiste le max observe au fil des
-  // chargements/polls de cette page, plutot qu'un 0 fige.
-  let peakVelocity = drop.peakVelocity || 0;
-  if (drop.status === "LIVE" && velocity > peakVelocity) {
-    peakVelocity = velocity;
-    await db.drop.update({
-      where: { id: drop.id },
-      data: { peakVelocity },
-    });
-  }
-  const peakTime = null;
-
   const estimatedSelloutMinutes =
     velocity > 0 && stockRemaining > 0
       ? Math.round((stockRemaining / velocity) / 60)
       : null;
+
+  // Historique complet trie chronologiquement, reutilise pour : timestamp du
+  // pic de vitesse, alerte stock bas, vitesse moyenne et tendance recente.
+  const ordersChrono = [...orders].sort(
+    (a, b) => a.createdAt.getTime() - b.createdAt.getTime()
+  );
+
+  // Pic de vitesse AVEC horodatage : fenetre glissante de 60s sur tout
+  // l'historique des commandes (pas juste les 60 dernieres secondes).
+  let peakVelocityValue = 0;
+  let peakTime = null;
+  for (const o of ordersChrono) {
+    const windowStart = new Date(o.createdAt.getTime() - windowMs);
+    const windowItems = ordersChrono
+      .filter((x) => x.createdAt > windowStart && x.createdAt <= o.createdAt)
+      .reduce((sum, x) => sum + (x.itemCount || 0), 0);
+    const rate = windowItems / (windowMs / 1000);
+    if (rate > peakVelocityValue) {
+      peakVelocityValue = rate;
+      peakTime = o.createdAt;
+    }
+  }
+  const peakVelocity = Math.max(drop.peakVelocity || 0, peakVelocityValue, velocity);
+  if (drop.status === "LIVE" && peakVelocity > (drop.peakVelocity || 0)) {
+    await db.drop.update({ where: { id: drop.id }, data: { peakVelocity } });
+  }
+
+  // Vitesse moyenne sur toute la duree ecoulee du drop.
+  const elapsedSecondsTotal = drop.startTime
+    ? Math.max(1, ((drop.status === "LIVE" ? now : drop.endTime || now).getTime() - drop.startTime.getTime()) / 1000)
+    : null;
+  const avgVelocity = elapsedSecondsTotal ? totalItemsSold / elapsedSecondsTotal : 0;
+
+  const ordersLast5Min = orders.filter(
+    (o) => o.createdAt >= new Date(now.getTime() - 5 * 60 * 1000)
+  ).length;
+
+  // Tendance recente pour le mini graphique : 6 tranches de 1 minute.
+  const velocityTrend = Array.from({ length: 6 }, (_, i) => {
+    const bucketEnd = new Date(now.getTime() - (5 - i) * 60 * 1000);
+    const bucketStart = new Date(bucketEnd.getTime() - 60 * 1000);
+    const items = orders
+      .filter((o) => o.createdAt > bucketStart && o.createdAt <= bucketEnd)
+      .reduce((sum, o) => sum + (o.itemCount || 0), 0);
+    return items;
+  });
+
+  // Alerte stock bas : premiere commande apres laquelle le stock restant
+  // passe sous 10% (ou 5 unites, selon le plus petit des deux).
+  const lowStockThreshold = drop.maxUnits > 0 ? Math.min(5, Math.ceil(drop.maxUnits * 0.1)) : 0;
+  let lowStockAlertAt = null;
+  let lowStockRemainingAt = null;
+  if (lowStockThreshold > 0) {
+    let runningSold = 0;
+    for (const o of ordersChrono) {
+      runningSold += o.itemCount || 0;
+      const remaining = drop.maxUnits - runningSold;
+      if (remaining <= lowStockThreshold) {
+        lowStockAlertAt = o.createdAt;
+        lowStockRemainingAt = Math.max(0, remaining);
+        break;
+      }
+    }
+  }
 
   // Comparaison au drop precedent (le plus recent ENDED de cette boutique) :
   // null si c'est le premier drop, sinon un vrai delta calcule.
@@ -141,12 +199,69 @@ export const loader = async ({ request }) => {
       )
     : null;
 
+  // Classement "Top sellers" — jusqu'a 3 produits, tries par unites vendues.
+  const topSellers = productStats.slice(0, 3).map((p) => {
+    const selloutSeconds =
+      p.lastSoldAt && drop.startTime
+        ? Math.max(0, Math.round((p.lastSoldAt.getTime() - drop.startTime.getTime()) / 1000))
+        : null;
+    return {
+      id: p.id,
+      productName: p.productName,
+      unitsSold: p.unitsSold,
+      revenue: Number(p.revenue ?? 0),
+      selloutLabel: selloutSeconds != null ? `sold out in ${formatDuration(selloutSeconds)}` : "still selling",
+    };
+  });
+
+  // Timeline du drop — reconstruite a partir des donnees reelles (aucun
+  // stockage d'evenements de cycle de vie dedie n'existe encore) : ouverture,
+  // pic de vitesse, alerte stock bas, cloture. S'affiche meme a 0 vente.
+  const timeline = [];
+  if (drop.startTime) {
+    timeline.push({
+      type: "started",
+      timestamp: drop.startTime,
+      title: "Drop went live",
+      description:
+        visitorsTotal > 0 ? `${visitorsTotal} visitor${visitorsTotal > 1 ? "s" : ""} so far` : "Waiting for traffic",
+    });
+  }
+  if (peakTime && peakVelocityValue > 0) {
+    timeline.push({
+      type: "peak",
+      timestamp: peakTime,
+      title: `Peak velocity — ${peakVelocityValue.toFixed(1)} items/sec`,
+      description: "Highest sales rate observed for this drop",
+    });
+  }
+  if (lowStockAlertAt) {
+    timeline.push({
+      type: "low_stock",
+      timestamp: lowStockAlertAt,
+      title: `Low stock alert — ${lowStockRemainingAt} item${lowStockRemainingAt === 1 ? "" : "s"} left`,
+      description: "Stock dropped below 10% remaining",
+    });
+  }
+  if (drop.status === "ENDED" && drop.endTime) {
+    timeline.push({
+      type: "ended",
+      timestamp: drop.endTime,
+      title: stockRemaining === 0 && drop.maxUnits > 0 ? "Drop ended — fully sold out" : "Drop ended",
+      description: `$${totalRevenue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} total revenue · ${orderCount} order${orderCount === 1 ? "" : "s"} confirmed`,
+    });
+  }
+  timeline.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+
   const liveStats = {
     conversionRate,
     conversionDelta,
     velocity,
     peakVelocity,
-    peakTime,
+    peakTime: peakTime ? peakTime.toISOString() : null,
+    avgVelocity,
+    ordersLast5Min,
+    velocityTrend,
     revenue: totalRevenue,
     stockRemaining,
     soldCount: totalItemsSold,
@@ -228,7 +343,8 @@ export const loader = async ({ request }) => {
     drop: dropView,
     whoIsBuying,
     traffic: trafficView,
-    events, // pour la timeline plus tard
+    topSellers,
+    timeline: timeline.map((t) => ({ ...t, timestamp: t.timestamp.toISOString() })),
   };
 };
 
@@ -236,7 +352,7 @@ export const loader = async ({ request }) => {
 // CLIENT: Live Overlay UI
 // ===============================
 export default function LiveDashboardPage() {
-  const { drop, whoIsBuying, traffic } = useLoaderData();
+  const { drop, whoIsBuying, traffic, topSellers, timeline } = useLoaderData();
   const revalidator = useRevalidator();
 
   // L'app affiche tout en USD, sans conversion.
@@ -641,7 +757,22 @@ export default function LiveDashboardPage() {
             />
           </div>
 
+          {mode === "speed" && (
+            <div
+              style={{
+                marginTop: 18,
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 14,
+              }}
+            >
+              <StockProgressBoard drop={drop} />
+              <SalesVelocityBoard drop={drop} />
+            </div>
+          )}
+
           {/* WHO IS BUYING (simplifié, branchement DB) */}
+          {mode === "speed" && (
           <div
             style={{
               marginTop: 18,
@@ -790,6 +921,14 @@ export default function LiveDashboardPage() {
               )}
             </div>
           </div>
+          )}
+
+          {mode === "analysis" && (
+            <div style={{ marginTop: 18, display: "flex", flexDirection: "column", gap: 14 }}>
+              <TopSellersBoard topSellers={topSellers} />
+              <DropTimelineBoard timeline={timeline} />
+            </div>
+          )}
         </div>
 
         {/* RIGHT COLUMN */}
@@ -1091,6 +1230,271 @@ function KpiCard({
           }}
         >
           {finalSubLabel}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * STOCK PROGRESS — barre de progression + repartition sold/left/ETA.
+ * S'affiche meme a 0 vente (barre vide, ETA "—").
+ */
+function StockProgressBoard({ drop }) {
+  const total = drop.totalItems || 0;
+  const sold = drop.live.soldCount;
+  const left = drop.live.stockRemaining;
+  const pct = drop.live.soldPct;
+  const eta =
+    drop.live.estimatedSelloutMinutes != null
+      ? `~${drop.live.estimatedSelloutMinutes}min`
+      : "—";
+
+  return (
+    <div
+      style={{
+        borderRadius: 12,
+        border: "1px solid rgba(148,163,184,0.45)",
+        backgroundColor: "#f9fafb",
+        padding: "14px 16px",
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#6b7280" }}>
+          Stock progress
+        </div>
+        <div style={{ fontSize: 11, color: "#6b7280" }}>
+          {sold}/{total} sold
+        </div>
+      </div>
+
+      <div style={{ height: 8, borderRadius: 999, backgroundColor: "#e5e7eb", overflow: "hidden" }}>
+        <div
+          style={{
+            width: `${Math.min(100, pct)}%`,
+            height: "100%",
+            background: "linear-gradient(90deg,#fbbf24,#fb7185)",
+            borderRadius: 999,
+          }}
+        />
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, marginBottom: 12 }}>
+        <span style={{ fontSize: 10.5, color: "#9ca3af" }}>0</span>
+        <span style={{ fontSize: 11, fontWeight: 700, color: "#fb7185" }}>{pct}% gone</span>
+        <span style={{ fontSize: 10.5, color: "#9ca3af" }}>{total}</span>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
+        <StatBox label="Left" value={left} color="#fb7185" bg="rgba(251,113,133,0.08)" />
+        <StatBox label="Sold" value={sold} color="#16a34a" bg="rgba(22,163,74,0.08)" />
+        <StatBox label="Est. sell-out" value={eta} color="#818cf8" bg="rgba(129,140,248,0.08)" />
+      </div>
+    </div>
+  );
+}
+
+function StatBox({ label, value, color, bg }) {
+  return (
+    <div style={{ borderRadius: 8, backgroundColor: bg, padding: "8px 6px", textAlign: "center" }}>
+      <div style={{ fontSize: 15, fontWeight: 800, color }}>{value}</div>
+      <div style={{ fontSize: 9.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "#6b7280", marginTop: 2 }}>
+        {label}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * SALES VELOCITY — vitesse actuelle + mini-tendance sur les 6 dernieres
+ * minutes + pic/moyenne/commandes recentes. S'affiche meme a 0 vente.
+ */
+function SalesVelocityBoard({ drop }) {
+  const { velocity, peakVelocity, avgVelocity, ordersLast5Min, velocityTrend } = drop.live;
+  const maxTrend = Math.max(1, ...(velocityTrend || [0]));
+
+  let trendLabel = "No data yet";
+  if (avgVelocity > 0) {
+    if (velocity > avgVelocity * 1.15) trendLabel = "trending ↑";
+    else if (velocity < avgVelocity * 0.85) trendLabel = "trending ↓";
+    else trendLabel = "steady →";
+  }
+
+  return (
+    <div
+      style={{
+        borderRadius: 12,
+        border: "1px solid rgba(148,163,184,0.45)",
+        backgroundColor: "#f9fafb",
+        padding: "14px 16px",
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#6b7280" }}>
+          Sales velocity
+        </div>
+        <div style={{ fontSize: 11, color: "#6b7280" }}>Last 60s</div>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 12 }}>
+        <div>
+          <span style={{ fontSize: 28, fontWeight: 800, color: "#f59e0b", letterSpacing: "-1px" }}>
+            {velocity.toFixed(1)}
+          </span>
+          <span style={{ fontSize: 13, color: "#6b7280", fontWeight: 600 }}>/sec</span>
+          <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}>items/second · {trendLabel}</div>
+        </div>
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 32 }}>
+          {(velocityTrend || []).map((v, i) => (
+            <div
+              key={i}
+              style={{
+                width: 6,
+                height: `${Math.max(8, (v / maxTrend) * 100)}%`,
+                borderRadius: 2,
+                backgroundColor: i === velocityTrend.length - 1 ? "#f59e0b" : "rgba(245,158,11,0.35)",
+              }}
+            />
+          ))}
+        </div>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, borderTop: "1px solid rgba(148,163,184,0.3)", paddingTop: 10 }}>
+        <StatRow label="Peak velocity" value={`${peakVelocity.toFixed(1)}/s`} />
+        <StatRow label="Avg velocity" value={`${avgVelocity.toFixed(1)}/s`} />
+        <StatRow label="Orders last 5 min" value={ordersLast5Min} />
+      </div>
+    </div>
+  );
+}
+
+function StatRow({ label, value }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+      <span style={{ color: "#6b7280" }}>{label}</span>
+      <span style={{ fontWeight: 700, color: "#111827" }}>{value}</span>
+    </div>
+  );
+}
+
+/**
+ * TOP SELLERS — classement des produits par unites vendues (mode Analysis).
+ */
+function TopSellersBoard({ topSellers }) {
+  const maxUnits = Math.max(1, ...topSellers.map((p) => p.unitsSold));
+
+  return (
+    <div
+      style={{
+        borderRadius: 12,
+        border: "1px solid rgba(148,163,184,0.45)",
+        backgroundColor: "#f9fafb",
+        padding: "14px 16px",
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#6b7280" }}>
+          Top sellers — which products sold out first
+        </div>
+      </div>
+
+      {topSellers.length === 0 ? (
+        <div style={{ fontSize: 12, color: "#6b7280" }}>No sales recorded yet for this drop.</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {topSellers.map((p, i) => (
+            <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div
+                style={{
+                  width: 20,
+                  height: 20,
+                  borderRadius: 5,
+                  backgroundColor: i === 0 ? "#fbbf24" : "rgba(148,163,184,0.2)",
+                  color: i === 0 ? "#78350f" : "#6b7280",
+                  fontSize: 11,
+                  fontWeight: 800,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                {i + 1}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: "#111827" }}>{p.productName}</div>
+                <div style={{ fontSize: 11, color: "#6b7280" }}>
+                  {p.unitsSold} sold · {p.selloutLabel}
+                </div>
+                <div style={{ height: 4, borderRadius: 999, backgroundColor: "#e5e7eb", marginTop: 4, overflow: "hidden" }}>
+                  <div
+                    style={{
+                      width: `${(p.unitsSold / maxUnits) * 100}%`,
+                      height: "100%",
+                      backgroundColor: i === 0 ? "#f59e0b" : "#9ca3af",
+                    }}
+                  />
+                </div>
+              </div>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: "#111827", flexShrink: 0 }}>
+                ${p.revenue.toLocaleString("en-US")}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * DROP TIMELINE — reconstruite a partir des donnees reelles (ouverture, pic
+ * de vitesse, alerte stock bas, cloture). Mode Analysis.
+ */
+function DropTimelineBoard({ timeline }) {
+  const dotColor = { started: "#16a34a", peak: "#f59e0b", low_stock: "#dc2626", ended: "#6b7280" };
+
+  return (
+    <div
+      style={{
+        borderRadius: 12,
+        border: "1px solid rgba(148,163,184,0.45)",
+        backgroundColor: "#f9fafb",
+        padding: "14px 16px",
+      }}
+    >
+      <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#6b7280", marginBottom: 12 }}>
+        Drop timeline
+      </div>
+
+      {timeline.length === 0 ? (
+        <div style={{ fontSize: 12, color: "#6b7280" }}>Timeline will fill in as this drop progresses.</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {timeline.map((t, i) => (
+            <div key={i} style={{ display: "flex", gap: 10 }}>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
+                <div
+                  style={{
+                    width: 9,
+                    height: 9,
+                    borderRadius: "50%",
+                    backgroundColor: dotColor[t.type] || "#9ca3af",
+                    marginTop: 3,
+                  }}
+                />
+                {i < timeline.length - 1 && (
+                  <div style={{ width: 1, flex: 1, backgroundColor: "rgba(148,163,184,0.35)", marginTop: 3 }} />
+                )}
+              </div>
+              <div style={{ paddingBottom: 4 }}>
+                <div style={{ fontSize: 10.5, color: "#9ca3af", fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}>
+                  {new Date(t.timestamp).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                </div>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: "#111827", marginTop: 2 }}>{t.title}</div>
+                <div style={{ fontSize: 11.5, color: "#6b7280", marginTop: 1 }}>{t.description}</div>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>

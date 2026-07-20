@@ -19,7 +19,7 @@ export const SUPPORT_CATEGORIES = [
       {
         question: "How do referrals affect a customer's waitlist position?",
         answer:
-          "When referrals are enabled on a drop, each confirmed referral adds points to the referrer's score. Scores are used to sort the queue — the higher the score, the closer to the front. You set how many points each successful referral gives in the drop settings.",
+          "When referrals are enabled on a drop, each confirmed referral adds points to the referrer's score. Scores are used to sort the queue — the higher the score, the closer to the front. You set how many points each successful referral gives in the drop settings. This works on every plan; the automated \"your rank moved up\" email that notifies customers requires the Pro plan or above.",
       },
       {
         question: "How do I see who unsubscribed from a waitlist?",
@@ -35,7 +35,12 @@ export const SUPPORT_CATEGORIES = [
       {
         question: "How do waitlist emails work?",
         answer:
-          "Go to Emails, link an automation to a drop using its Drop ID, and customize the subject/body. Confirmation and rank-update emails send automatically as people join or move up.",
+          "Go to Emails, link an automation to a drop using its Drop ID, and customize the subject/body. The instant confirmation email sends automatically as soon as someone joins the waitlist. Rank-update, drop-live, and drop-ended emails require the Pro plan or above.",
+      },
+      {
+        question: "Which plan do I need for automated emails?",
+        answer:
+          "Growth includes the instant waitlist confirmation email. Pro and above unlock the full set: rank-update (referral position changes), drop-is-live, and drop-ended emails — all customizable with your brand, logo, and CTA links.",
       },
       {
         question: "Why can't I link an automation to an ended drop?",

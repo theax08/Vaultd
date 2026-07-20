@@ -133,7 +133,7 @@ export const loader = async ({ request }) => {
   try {
     const { getAccountForShop } = await import("../vaultd-account.server");
     const account = await getAccountForShop(shopDomain);
-    plan = account?.plan ?? null;
+    plan = PLAN_ORDER.includes(account?.plan) ? account.plan : null;
   } catch {}
 
   return {
@@ -250,14 +250,35 @@ export const action = async ({ request }) => {
 // ==========================================
 // CLIENT: UI – Page Emails
 // ==========================================
-// Plan minimum par onglet : waitlist = GROWTH+, live/ended = PRO+
-const TAB_MIN_PLAN = { waitlist: "GROWTH", live: "PRO", ended: "PRO" };
+// Plan minimum par onglet : waitlist = GROWTH+, live/ended = PRO+.
+// rank_update n'est pas un onglet mais une carte a l'interieur de l'onglet
+// waitlist (email de mise a jour de position/referral) — reservee a PRO+,
+// meme si la carte de confirmation de waitlist reste dispo des GROWTH.
+const TAB_MIN_PLAN = { waitlist: "GROWTH", rank_update: "PRO", live: "PRO", ended: "PRO" };
 
 function isTabLocked(tabId, plan) {
   const minPlan = TAB_MIN_PLAN[tabId] ?? "PRO";
   const planIdx = PLAN_ORDER.indexOf(plan);
   const minIdx = PLAN_ORDER.indexOf(minPlan);
   return planIdx < minIdx; // -1 si plan null → toujours locked
+}
+
+function LockedCard({ title, description, planName }) {
+  return (
+    <div style={cardPadded}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#1a1a1a" }}>{title}</div>
+          <p style={{ fontSize: 12.5, color: "#6d7175", margin: "4px 0 0 0" }}>{description}</p>
+        </div>
+        <span style={{ fontSize: 10, color: "#C4C4C4" }}>●</span>
+      </div>
+      <p style={{ fontSize: 13, color: "#6d7175", marginTop: 14, marginBottom: 0 }}>
+        Available on the {planName} plan.{" "}
+        <Link to="/app/plans" style={{ color: "#1a1a1a", fontWeight: 600 }}>Upgrade to unlock →</Link>
+      </p>
+    </div>
+  );
 }
 
 function LockedTabMessage({ planName }) {
@@ -734,21 +755,29 @@ export default function EmailsPage() {
                 isConnected={isConnected}
                 isSaving={isSaving}
               />
-              <AutomationCard
-                type={TYPES.WAITLIST_RANK_UPDATE}
-                brandName={brandName}
-                mainColor={mainColor}
-                dropExternalId={dropExternalId}
-                automation={automationsByType[TYPES.WAITLIST_RANK_UPDATE]}
-                subjects={subjects}
-                bodies={bodies}
-                config={configByType[TYPES.WAITLIST_RANK_UPDATE]}
-                onSubjectChange={handleSubjectChange}
-                onBodyChange={handleBodyChange}
-                onSave={handleSave}
-                isConnected={isConnected}
-                isSaving={isSaving}
-              />
+              {isTabLocked("rank_update", plan) ? (
+                <LockedCard
+                  title="2. Rank Update"
+                  description="Sent when a customer moves up in the waitlist (position improves)."
+                  planName="Pro"
+                />
+              ) : (
+                <AutomationCard
+                  type={TYPES.WAITLIST_RANK_UPDATE}
+                  brandName={brandName}
+                  mainColor={mainColor}
+                  dropExternalId={dropExternalId}
+                  automation={automationsByType[TYPES.WAITLIST_RANK_UPDATE]}
+                  subjects={subjects}
+                  bodies={bodies}
+                  config={configByType[TYPES.WAITLIST_RANK_UPDATE]}
+                  onSubjectChange={handleSubjectChange}
+                  onBodyChange={handleBodyChange}
+                  onSave={handleSave}
+                  isConnected={isConnected}
+                  isSaving={isSaving}
+                />
+              )}
             </div>
           )}
 
