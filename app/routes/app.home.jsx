@@ -14,6 +14,7 @@ import {
 export const loader = async ({ request }) => {
   const { session } = await authenticate.admin(request);
   const shopDomain = session.shop;
+  const url = new URL(request.url);
 
   const dbModule = await import("../db.server");
   const db =
@@ -27,6 +28,12 @@ export const loader = async ({ request }) => {
   try {
     account = await getAccountForShop(shopDomain);
   } catch {}
+
+  if (!account) {
+    const host = url.searchParams.get("host") || "";
+    const hostParam = host ? `?host=${encodeURIComponent(host)}` : "";
+    return redirect(`/app/settings${hostParam}`);
+  }
 
   const startOfMonth = new Date();
   startOfMonth.setDate(1);
