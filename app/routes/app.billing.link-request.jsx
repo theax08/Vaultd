@@ -57,8 +57,9 @@ export const loader = async ({ request }) => {
     }
 
     const errMsg = err?.message ?? String(err);
-    console.error("[billing/link-request] error:", errMsg);
-    return redirect(`/app/settings?link=error&debug=${encodeURIComponent(errMsg.slice(0, 200))}`);
+    const errData = err?.errorData ? JSON.stringify(err.errorData).slice(0, 300) : "";
+    console.error("[billing/link-request] error:", errMsg, errData, "isTest:", isTest);
+    return redirect(`/app/settings?link=error&debug=${encodeURIComponent((errMsg + " " + errData).trim().slice(0, 300))}`);
   }
 };
 
