@@ -43,14 +43,20 @@ export const loader = async ({ request }) => {
 
     if (planConfirmed) {
       let account = await getAccountForShop(shop);
+      let isNewAccount = false;
       if (!account) {
         const result = await createAccountForShop(shop);
         account = result?.account ?? null;
+        isNewAccount = true;
       }
       if (account) {
         await db.vaultdAccount.update({
           where: { id: account.id },
-          data: { plan },
+          // lastSeenPlan only on a brand-new account, so this first plan
+          // isn't shown as a "newly unlocked" feature on Help. On an
+          // existing account, leave lastSeenPlan alone so a genuine
+          // upgrade still surfaces what's new.
+          data: isNewAccount ? { plan, lastSeenPlan: plan } : { plan },
         });
       }
       back.set("billing", "confirmed");

@@ -25,7 +25,7 @@ export const loader = async ({ request }) => {
 
   const rawBase = process.env.SHOPIFY_APP_URL || new URL(request.url).origin;
   const baseUrl = (rawBase.startsWith("http") ? rawBase : `https://${rawBase}`).replace(/\/$/, "");
-  const returnUrl = `${baseUrl}/app/billing/link-return?ticket=${encodeURIComponent(ticket)}${host ? `&host=${encodeURIComponent(host)}` : ""}`;
+  const returnUrl = `${baseUrl}/app/billing/link-return?ticket=${encodeURIComponent(ticket)}&shop=${session.shop}${host ? `&host=${encodeURIComponent(host)}` : ""}`;
 
   let isTest = false;
   try {
