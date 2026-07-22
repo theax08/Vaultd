@@ -12,6 +12,17 @@ import { STORE_ADDON_LABEL } from "../vaultd-plans";
 // confirmation page, not from inside the embedded app session — the same
 // constraint that already required app_.billing.return.jsx for the main
 // plan's billing return.
+// host isn't carried through the billing round-trip (see app.billing.link-request.jsx
+// for why), but the final redirect back into the app still needs it for
+// Shopify's embedded-app bounce to re-embed the iframe instead of landing
+// bare on the Railway domain. Reconstruct the equivalent value from the shop
+// domain, which the ticket always carries.
+function hostParamFor(shop) {
+  if (!shop) return "";
+  const host = Buffer.from(`admin.shopify.com/store/${shop.replace(".myshopify.com", "")}`).toString("base64url");
+  return `&host=${encodeURIComponent(host)}`;
+}
+
 export const loader = async ({ request }) => {
   const url = new URL(request.url);
   const ticket = url.searchParams.get("ticket");
@@ -21,6 +32,7 @@ export const loader = async ({ request }) => {
   }
 
   let status = "error";
+  let shop = "";
   try {
     const { decodeLinkTicket, linkShopToAccount } = await import("../vaultd-account.server");
     // No separate ?shop= param (it was pushing returnUrl past Shopify's
@@ -28,7 +40,7 @@ export const loader = async ({ request }) => {
     const payload = decodeLinkTicket(ticket);
 
     if (payload) {
-      const shop = payload.shopDomain;
+      shop = payload.shopDomain;
 
       // The ticket only proves the credentials were checked earlier — it
       // does not prove the add-on charge was actually approved. Confirm
@@ -61,7 +73,7 @@ export const loader = async ({ request }) => {
     console.error("[billing/link-return] linking failed:", err?.message);
   }
 
-  return redirect(`/app/settings?link=${status}`);
+  return redirect(`/app/settings?link=${status}${hostParamFor(shop)}`);
 };
 
 export default function BillingLinkReturnPage() {
