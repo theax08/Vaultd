@@ -20,6 +20,7 @@ import {
   cardPadded,
   pillBadge,
   primaryButtonStyle,
+  primaryButtonDisabledStyle,
   secondaryButtonStyle,
   destructiveTextButtonStyle,
   toggleSwitchStyle,
@@ -254,10 +255,27 @@ export const action = async ({ request }) => {
     const limits = PLAN_LIMITS[plan];
 
     // Le plafond d'unites par drop est une limite du forfait, pas du stock
-    // Shopify : on ne depasse jamais le stock reel, mais on plafonne en plus
-    // si le forfait l'impose (ex. Free = 100 pieces/drop max).
-    if (limits.maxUnitsPerDrop != null) {
-      maxUnits = Math.min(maxUnits, limits.maxUnitsPerDrop);
+    // Shopify : on bloque la creation/mise a jour si le stock reel selectionne
+    // depasse ce plafond, plutot que de plafonner silencieusement (le
+    // marchand doit reduire sa selection ou upgrader son plan).
+    if (limits.maxUnitsPerDrop != null && maxUnits > limits.maxUnitsPerDrop) {
+      return {
+        intent,
+        errors: {
+          productIds: `Your selection (${maxUnits.toLocaleString("en-US")} units) exceeds your plan's limit of ${limits.maxUnitsPerDrop} units/drop. Remove some products or upgrade your plan.`,
+        },
+        values: {
+          id: dropId,
+          name,
+          startTime: startTimeRaw,
+          description,
+          productIds,
+          autoLaunch,
+          maxWaitlistSize: maxWaitlistSizeRaw,
+          referralEnabled,
+          referralPointsPerShare,
+        },
+      };
     }
 
     // La limite de waitlist par drop est une fonctionnalite Growth+.
@@ -1329,7 +1347,13 @@ export default function DropsPage() {
                     }}
                   >
                     <div style={{ display: "flex", gap: 10 }}>
-                      <button type="button" style={primaryButtonStyle} onClick={handleSaveDrop}>
+                      <button
+                        type="button"
+                        disabled={willBeCapped}
+                        style={willBeCapped ? primaryButtonDisabledStyle : primaryButtonStyle}
+                        onClick={handleSaveDrop}
+                        title={willBeCapped ? "Reduce your selection or upgrade your plan to save this drop." : undefined}
+                      >
                         {editorMode === "create"
                           ? "Save drop"
                           : "Update drop"}

@@ -76,7 +76,7 @@ export const loader = async ({ request }) => {
 };
 
 export const action = async ({ request }) => {
-  const { session } = await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
   const shopDomain = session.shop;
   const dbModule = await import("../db.server");
   const db = dbModule.default;
@@ -93,10 +93,32 @@ export const action = async ({ request }) => {
   }
 
   if (intent === "login_account") {
-    const existing = await getAccountForShop(shopDomain);
-    if (existing) {
-      return { intent, error: "This shop is already linked to a Vaultd account." };
+    // Note: no "already has an account" guard here — a shop that already paid
+    // for its own plan can still switch to joining someone else's Elite
+    // account. loginToAccount() already refuses a no-op relink to the same
+    // account it's already on.
+
+    // Linking rides on the Elite account's plan, but this store still needs
+    // its own active Shopify subscription first — otherwise it gets full
+    // Elite access for free, without ever paying for its own installation.
+    let hasOwnActiveSubscription = false;
+    try {
+      const res = await admin.graphql(
+        `{ currentAppInstallation { activeSubscriptions { status } } }`
+      );
+      const { data } = await res.json();
+      hasOwnActiveSubscription = (data?.currentAppInstallation?.activeSubscriptions ?? []).some(
+        (s) => s.status === "ACTIVE"
+      );
+    } catch {}
+
+    if (!hasOwnActiveSubscription) {
+      return {
+        intent,
+        error: "This store needs its own active Vaultd subscription before it can link to another account. Choose a plan first.",
+      };
     }
+
     const accountId = (formData.get("accountId") || "").toString().trim();
     const password = (formData.get("password") || "").toString();
     const result = await loginToAccount({ accountId, password, shopDomain });
@@ -505,6 +527,33 @@ export default function SettingsPage() {
                 your password.
               </p>
             )}
+
+            <div style={{ marginTop: 18, paddingTop: 16, borderTop: "1px solid #e3e3e3" }}>
+              <div style={cardLabel}>JOIN A DIFFERENT ACCOUNT</div>
+              <p style={{ fontSize: 13, color: "#6d7175", margin: "0 0 8px 0" }}>
+                Already run Vaultd on another store with an Elite account? Log in with
+                that account's ID and password to switch this store over to it.
+              </p>
+              <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: 8, maxWidth: 320 }}>
+                <input
+                  type="text"
+                  required
+                  value={loginAccountId}
+                  onChange={(e) => setLoginAccountId(e.target.value)}
+                  placeholder="Account ID"
+                  style={inputStyle}
+                />
+                <input
+                  type="password"
+                  required
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  placeholder="Password"
+                  style={inputStyle}
+                />
+                <button type="submit" style={secondaryButtonStyle}>Log in</button>
+              </form>
+            </div>
 
           </>
         )}
