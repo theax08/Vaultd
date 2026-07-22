@@ -21,6 +21,12 @@ export const PLAN_PRICES = {
   ELITE: "$499/month",
 };
 
+// Add-on facture separement (pas un palier de PLAN_ORDER) : chaque boutique
+// additionnelle liee a un compte Elite paie ce montant sur SA PROPRE session
+// Shopify, au lieu de re-payer le plein tarif Elite une deuxieme fois.
+export const STORE_ADDON_LABEL = "Vaultd Additional Store";
+export const STORE_ADDON_PRICE_USD = 50;
+
 // Limites reelles appliquees par plan. null = illimite.
 export const PLAN_LIMITS = {
   GROWTH: { maxDropsPerMonth: 3, maxUnitsPerDrop: 200 },

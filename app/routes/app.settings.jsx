@@ -1,10 +1,11 @@
-import { useLoaderData, useActionData, useSubmit, Link } from "react-router";
+import { useLoaderData, useActionData, useSubmit, useSearchParams, Link } from "react-router";
 import { useState, useEffect } from "react";
 import { authenticate } from "../shopify.server";
 import {
   getAccountForShop,
   createAccountForShop,
-  loginToAccount,
+  verifyAccountCredentials,
+  createLinkTicket,
   requestPasswordReset,
   resetPasswordWithCode,
 } from "../vaultd-account.server";
@@ -53,7 +54,7 @@ const SHORT_PLAN_LABEL = {
 };
 
 export const loader = async ({ request }) => {
-  const { session } = await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
   const shopDomain = session.shop;
   const account = await getAccountForShop(shopDomain);
 
@@ -63,10 +64,28 @@ export const loader = async ({ request }) => {
   const { getShopSettings } = await import("../bot-protection.server");
   const shopSettings = await getShopSettings(shopDomain);
 
+  // Pour construire l'URL de sortie d'iframe vers /app/billing/link-request,
+  // meme calcul que sur /app/plans (admin.shopify.com/store/{handle}/apps/{app}/...).
+  let shopifyAdminBase = null;
+  let appHandle = null;
+  try {
+    const rawHost = url.searchParams.get("host");
+    if (rawHost) {
+      shopifyAdminBase = Buffer.from(rawHost, "base64url").toString();
+    } else {
+      shopifyAdminBase = `admin.shopify.com/store/${shopDomain.replace(".myshopify.com", "")}`;
+    }
+    const res = await admin.graphql(`{ app { handle } }`);
+    const { data } = await res.json();
+    appHandle = data?.app?.handle ?? null;
+  } catch {}
+
   return {
     shopDomain,
     account,
     isOnboarding,
+    shopifyAdminBase,
+    appHandle,
     botProtection: {
       enabled: shopSettings.botProtectionEnabled,
       siteKey: shopSettings.turnstileSiteKey || "",
@@ -76,7 +95,7 @@ export const loader = async ({ request }) => {
 };
 
 export const action = async ({ request }) => {
-  const { session, admin } = await authenticate.admin(request);
+  const { session } = await authenticate.admin(request);
   const shopDomain = session.shop;
   const dbModule = await import("../db.server");
   const db = dbModule.default;
@@ -95,35 +114,20 @@ export const action = async ({ request }) => {
   if (intent === "login_account") {
     // Note: no "already has an account" guard here — a shop that already paid
     // for its own plan can still switch to joining someone else's Elite
-    // account. loginToAccount() already refuses a no-op relink to the same
-    // account it's already on.
-
-    // Linking rides on the Elite account's plan, but this store still needs
-    // its own active Shopify subscription first — otherwise it gets full
-    // Elite access for free, without ever paying for its own installation.
-    let hasOwnActiveSubscription = false;
-    try {
-      const res = await admin.graphql(
-        `{ currentAppInstallation { activeSubscriptions { status } } }`
-      );
-      const { data } = await res.json();
-      hasOwnActiveSubscription = (data?.currentAppInstallation?.activeSubscriptions ?? []).some(
-        (s) => s.status === "ACTIVE"
-      );
-    } catch {}
-
-    if (!hasOwnActiveSubscription) {
-      return {
-        intent,
-        error: "This store needs its own active Vaultd subscription before it can link to another account. Choose a plan first.",
-      };
-    }
-
+    // account. linkShopToAccount() already refuses a no-op relink to the
+    // same account it's already on.
     const accountId = (formData.get("accountId") || "").toString().trim();
     const password = (formData.get("password") || "").toString();
-    const result = await loginToAccount({ accountId, password, shopDomain });
+
+    const result = await verifyAccountCredentials({ accountId, password });
     if (result.error) return { intent, error: result.error };
-    return { intent, success: true };
+
+    // Don't link yet — this store still needs to pay the per-store add-on
+    // on its OWN Shopify billing first. The ticket carries the verified
+    // target account through that billing round-trip without putting the
+    // password in a URL.
+    const ticket = createLinkTicket({ shopDomain, targetAccountId: result.account.id });
+    return { intent, success: true, linkTicket: ticket };
   }
 
   if (intent === "request_password_reset") {
@@ -180,9 +184,12 @@ export const action = async ({ request }) => {
 };
 
 export default function SettingsPage() {
-  const { shopDomain, account, isOnboarding, botProtection } = useLoaderData();
+  const { shopDomain, account, isOnboarding, shopifyAdminBase, appHandle, botProtection } = useLoaderData();
   const actionData = useActionData();
   const submit = useSubmit();
+  const [searchParams] = useSearchParams();
+  const host = searchParams.get("host") || "";
+  const linkStatus = searchParams.get("link");
 
   const [newEmail, setNewEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -222,11 +229,29 @@ export default function SettingsPage() {
     }
   }, [actionData]);
 
+  // Une fois les identifiants verifies, on sort de l'iframe pour facturer le
+  // $50/mois add-on sur CETTE boutique — la liaison ne se finalise qu'au
+  // retour de ce billing (app.billing.link-return).
+  useEffect(() => {
+    if (actionData?.intent === "login_account" && actionData?.success && actionData?.linkTicket) {
+      const hostParam = host ? `&host=${encodeURIComponent(host)}` : "";
+      const href =
+        shopifyAdminBase && appHandle
+          ? `https://${shopifyAdminBase}/apps/${appHandle}/app/billing/link-request?ticket=${encodeURIComponent(actionData.linkTicket)}${hostParam}`
+          : `/app/billing/link-request?ticket=${encodeURIComponent(actionData.linkTicket)}${hostParam}`;
+      window.top.location.href = href;
+    }
+  }, [actionData, host, shopifyAdminBase, appHandle]);
+
   const handleCreateAccount = (e) => {
     e.preventDefault();
     setIsCreating(true);
     submit({ intent: "create_account", email: newEmail, password: newPassword }, { method: "post" });
   };
+
+  const isRedirectingToLinkBilling = Boolean(
+    actionData?.intent === "login_account" && actionData?.success && actionData?.linkTicket
+  );
 
   const handleLogin = (e) => {
     e.preventDefault();
@@ -277,12 +302,28 @@ export default function SettingsPage() {
         </div>
       )}
 
+      {linkStatus === "confirmed" && (
+        <div style={{ marginBottom: 16 }}>
+          <AutoDismissBanner message="Store linked to the other account." dismissKey={linkStatus} />
+        </div>
+      )}
+      {linkStatus === "error" && (
+        <div style={{ marginBottom: 16 }}>
+          <AutoDismissBanner tone="error" message="Linking failed — the billing charge may have been declined. Please try again." dismissKey={linkStatus} />
+        </div>
+      )}
+
       {actionData?.error && (
         <div style={{ marginBottom: 16 }}>
           <AutoDismissBanner tone="error" message={actionData.error} dismissKey={actionData} />
         </div>
       )}
-      {actionData?.success && actionData.intent !== "request_password_reset" && (
+      {isRedirectingToLinkBilling && (
+        <div style={{ marginBottom: 16 }}>
+          <AutoDismissBanner message="Credentials verified — redirecting to billing for the $50/month store add-on…" dismissKey={actionData} />
+        </div>
+      )}
+      {actionData?.success && actionData.intent !== "request_password_reset" && !isRedirectingToLinkBilling && (
         <div style={{ marginBottom: 16 }}>
           <AutoDismissBanner
             message={actionData.intent === "reset_password" ? "Password reset. You can log in with your new password." : "Saved."}
@@ -375,7 +416,9 @@ export default function SettingsPage() {
                   placeholder="Password"
                   style={inputStyle}
                 />
-                <button type="submit" style={secondaryButtonStyle}>Log in</button>
+                <button type="submit" disabled={isRedirectingToLinkBilling} style={secondaryButtonStyle}>
+                  {isRedirectingToLinkBilling ? "Redirecting…" : "Log in"}
+                </button>
               </form>
 
               {!showForgotPassword ? (
@@ -497,7 +540,7 @@ export default function SettingsPage() {
                 </button>
               ) : (
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 12.5, color: "#303030" }}>Disconnect this store? It will lose access until re-linked.</span>
+                  <span style={{ fontSize: 12.5, color: "#303030" }}>Disconnect this store? It will lose access until re-linked. If this store pays the $50/month add-on, that subscription isn't cancelled automatically — do that from this store's Shopify admin.</span>
                   <button
                     type="button"
                     onClick={() => { submit({ intent: "disconnect_account" }, { method: "post" }); setConfirmDisconnect(false); }}
@@ -551,7 +594,9 @@ export default function SettingsPage() {
                   placeholder="Password"
                   style={inputStyle}
                 />
-                <button type="submit" style={secondaryButtonStyle}>Log in</button>
+                <button type="submit" disabled={isRedirectingToLinkBilling} style={secondaryButtonStyle}>
+                  {isRedirectingToLinkBilling ? "Redirecting…" : "Log in"}
+                </button>
               </form>
             </div>
 

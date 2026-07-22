@@ -207,8 +207,11 @@ export async function resetPasswordWithCode({ email, code, newPassword }) {
   return { success: true };
 }
 
-// Links a shop to an existing account by ID + password (Elite only).
-export async function loginToAccount({ accountId, password, shopDomain }) {
+// Verifies an account ID + password combo and that the target account is
+// Elite (required to accept additional linked stores). Does NOT link
+// anything yet — linking only happens after the requesting store pays the
+// per-store add-on, via linkShopToAccount() below.
+export async function verifyAccountCredentials({ accountId, password }) {
   const account = await db.vaultdAccount.findUnique({ where: { id: accountId } });
   if (!account || !(await verifyPassword(password, account.passwordHash))) {
     return { error: "Invalid account ID or password." };
@@ -216,16 +219,60 @@ export async function loginToAccount({ accountId, password, shopDomain }) {
   if (account.plan !== "ELITE") {
     return { error: "Linking a store to an existing account is only available on the Elite plan." };
   }
+  return { account };
+}
 
+// Actually links a shop to an account. Called after the shop's own
+// per-store add-on billing charge is confirmed (see app.billing.link-return).
+export async function linkShopToAccount({ accountId, shopDomain }) {
   const existing = await db.shopSettings.findUnique({ where: { shopDomain } });
-  if (existing?.vaultdAccountId === account.id) {
+  if (existing?.vaultdAccountId === accountId) {
     return { error: "This shop is already linked to this account." };
   }
 
   await db.shopSettings.upsert({
     where: { shopDomain },
-    create: { shopDomain, vaultdAccountId: account.id },
-    update: { vaultdAccountId: account.id },
+    create: { shopDomain, vaultdAccountId: accountId },
+    update: { vaultdAccountId: accountId },
   });
   return { account: await getAccountForShop(shopDomain) };
+}
+
+// Ticket signe (HMAC, sans stockage DB) qui relie la verification des
+// identifiants (avant paiement) a la finalisation de la liaison (apres
+// paiement) — evite de faire transiter le mot de passe par une URL de retour
+// de billing et evite une migration Prisma pour un etat ephemere de 15 min.
+const LINK_TICKET_TTL_MS = 15 * 60 * 1000;
+const LINK_TICKET_SECRET = process.env.SHOPIFY_API_SECRET || "vaultd-link-ticket-fallback";
+
+function signLinkTicketPayload(payloadB64) {
+  return crypto.createHmac("sha256", LINK_TICKET_SECRET).update(payloadB64).digest("base64url");
+}
+
+export function createLinkTicket({ shopDomain, targetAccountId }) {
+  const payloadB64 = Buffer.from(
+    JSON.stringify({ shopDomain, targetAccountId, exp: Date.now() + LINK_TICKET_TTL_MS })
+  ).toString("base64url");
+  return `${payloadB64}.${signLinkTicketPayload(payloadB64)}`;
+}
+
+export function verifyLinkTicket(ticket, shopDomain) {
+  if (!ticket || !ticket.includes(".")) return null;
+  const [payloadB64, sig] = ticket.split(".");
+  const expectedSig = signLinkTicketPayload(payloadB64);
+  const sigBuf = Buffer.from(sig || "");
+  const expectedBuf = Buffer.from(expectedSig);
+  if (sigBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(sigBuf, expectedBuf)) {
+    return null;
+  }
+
+  let payload;
+  try {
+    payload = JSON.parse(Buffer.from(payloadB64, "base64url").toString());
+  } catch {
+    return null;
+  }
+  if (payload.shopDomain !== shopDomain) return null;
+  if (Date.now() > payload.exp) return null;
+  return payload;
 }

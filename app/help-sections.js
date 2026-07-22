@@ -110,11 +110,12 @@ export const SECTIONS = [
     key: "multi_store",
     title: "Multi-store accounts",
     minPlan: "ELITE",
-    intro: "Link multiple Shopify stores to the same Vaultd account.",
+    intro: "Link multiple Shopify stores to the same Elite Vaultd account.",
     tips: [
-      "Generate a one-time link code from Settings on store A, then redeem it from Settings on store B.",
-      "Linked stores keep their own drops and waitlists — only the Vaultd account (plan, identity) is shared.",
-      "A code expires after 15 minutes and can only be used once.",
+      "On the store you want to link, go to Settings → Account and use \"Join a different account\" with the Elite account's ID and password (visible on Settings on the account's home store).",
+      "The store being linked pays a $50/month add-on on its own Shopify billing — not the full Elite price again. You'll be redirected to approve that charge before the link completes.",
+      "Linked stores keep their own drops and waitlists — only the Vaultd account (plan, identity) is shared across all linked stores.",
+      "If a linked store's $50/month add-on lapses (payment fails, subscription cancelled), that store is automatically unlinked — the other stores on the account are not affected.",
     ],
   },
   {

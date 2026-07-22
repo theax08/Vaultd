@@ -196,7 +196,7 @@ export const SUPPORT_CATEGORIES = [
       {
         question: "Can I link multiple Shopify stores to one account?",
         answer:
-          "Yes, on the Elite plan. From Settings on your other store, use \"Log in\" with your Account ID and password.",
+          "Yes, if the account is on the Elite plan. From Settings on the store you want to add, use \"Log in\" (or \"Join a different account\") with the Elite account's ID and password. The store being added pays a $50/month add-on on its own billing — not the full Elite price again — and you'll be asked to approve that charge before the link completes.",
       },
       {
         question: "How do I find my Account ID?",

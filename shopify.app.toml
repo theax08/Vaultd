@@ -38,7 +38,8 @@ scopes = "read_orders,write_metaobject_definitions,write_metaobjects,write_produ
 [auth]
 redirect_urls = [
   "https://vaultd-production.up.railway.app/auth/callback",
-  "https://vaultd-production.up.railway.app/app/billing/return"
+  "https://vaultd-production.up.railway.app/app/billing/return",
+  "https://vaultd-production.up.railway.app/app/billing/link-return"
 ]
 
 [app_proxy]

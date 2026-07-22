@@ -6,7 +6,7 @@ import {
   BillingReplacementBehavior,
   shopifyApp,
 } from "@shopify/shopify-app-react-router/server";
-import { PLAN_LABELS } from "./vaultd-plans.js";
+import { PLAN_LABELS, STORE_ADDON_LABEL, STORE_ADDON_PRICE_USD } from "./vaultd-plans.js";
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
 import prisma from "./db.server";
 
@@ -74,6 +74,18 @@ const shopify = shopifyApp({
       lineItems: [
         {
           amount: 499,
+          currencyCode: "USD",
+          interval: BillingInterval.Every30Days,
+        },
+      ],
+    },
+    // Facture sur SA PROPRE session Shopify une boutique qui rejoint le
+    // compte Elite d'une autre boutique — pas le plein tarif Elite.
+    [STORE_ADDON_LABEL]: {
+      replacementBehavior: BillingReplacementBehavior.ApplyImmediately,
+      lineItems: [
+        {
+          amount: STORE_ADDON_PRICE_USD,
           currencyCode: "USD",
           interval: BillingInterval.Every30Days,
         },
