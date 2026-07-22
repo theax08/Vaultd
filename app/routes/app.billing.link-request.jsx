@@ -9,7 +9,6 @@ import { STORE_ADDON_LABEL } from "../vaultd-plans";
 export const loader = async ({ request }) => {
   const url = new URL(request.url);
   const ticket = url.searchParams.get("ticket");
-  const host = url.searchParams.get("host") || "";
 
   if (!ticket) {
     return redirect("/app/settings?link=error&debug=missing_ticket");
@@ -25,7 +24,10 @@ export const loader = async ({ request }) => {
 
   const rawBase = process.env.SHOPIFY_APP_URL || new URL(request.url).origin;
   const baseUrl = (rawBase.startsWith("http") ? rawBase : `https://${rawBase}`).replace(/\/$/, "");
-  const returnUrl = `${baseUrl}/app/billing/link-return?ticket=${encodeURIComponent(ticket)}&shop=${session.shop}${host ? `&host=${encodeURIComponent(host)}` : ""}`;
+  // No &host= here — it roughly doubles returnUrl length once base64-encoded,
+  // and Shopify caps returnUrl at 255 chars. /app/settings already derives an
+  // equivalent admin base straight from the shop domain when host is absent.
+  const returnUrl = `${baseUrl}/app/billing/link-return?ticket=${encodeURIComponent(ticket)}`;
 
   let isTest = false;
   try {

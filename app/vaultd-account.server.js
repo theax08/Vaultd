@@ -242,21 +242,32 @@ export async function linkShopToAccount({ accountId, shopDomain }) {
 // identifiants (avant paiement) a la finalisation de la liaison (apres
 // paiement) — evite de faire transiter le mot de passe par une URL de retour
 // de billing et evite une migration Prisma pour un etat ephemere de 15 min.
+//
+// Encodage compact (pipe-delimite, pas de cles JSON ; HMAC tronque a 16
+// octets) : Shopify limite returnUrl a 255 caracteres, et le ticket doit y
+// tenir a cote de ?ticket=, &host= et le domaine de l'app.
 const LINK_TICKET_TTL_MS = 15 * 60 * 1000;
 const LINK_TICKET_SECRET = process.env.SHOPIFY_API_SECRET || "vaultd-link-ticket-fallback";
+const LINK_TICKET_SIG_BYTES = 16;
 
 function signLinkTicketPayload(payloadB64) {
-  return crypto.createHmac("sha256", LINK_TICKET_SECRET).update(payloadB64).digest("base64url");
+  return crypto
+    .createHmac("sha256", LINK_TICKET_SECRET)
+    .update(payloadB64)
+    .digest("base64url")
+    .slice(0, Math.ceil((LINK_TICKET_SIG_BYTES * 4) / 3));
 }
 
 export function createLinkTicket({ shopDomain, targetAccountId }) {
-  const payloadB64 = Buffer.from(
-    JSON.stringify({ shopDomain, targetAccountId, exp: Date.now() + LINK_TICKET_TTL_MS })
-  ).toString("base64url");
+  const exp = Date.now() + LINK_TICKET_TTL_MS;
+  const payloadB64 = Buffer.from(`${shopDomain}|${targetAccountId}|${exp}`).toString("base64url");
   return `${payloadB64}.${signLinkTicketPayload(payloadB64)}`;
 }
 
-export function verifyLinkTicket(ticket, shopDomain) {
+// Verifie la signature + expiration et renvoie { shopDomain, targetAccountId,
+// exp } sans presupposer quelle boutique appelle — utilise cote link-return,
+// ou aucune session live n'existe pour comparer a l'avance.
+export function decodeLinkTicket(ticket) {
   if (!ticket || !ticket.includes(".")) return null;
   const [payloadB64, sig] = ticket.split(".");
   const expectedSig = signLinkTicketPayload(payloadB64);
@@ -266,13 +277,24 @@ export function verifyLinkTicket(ticket, shopDomain) {
     return null;
   }
 
-  let payload;
+  let shopDomain, targetAccountId, expStr;
   try {
-    payload = JSON.parse(Buffer.from(payloadB64, "base64url").toString());
+    [shopDomain, targetAccountId, expStr] = Buffer.from(payloadB64, "base64url").toString().split("|");
   } catch {
     return null;
   }
-  if (payload.shopDomain !== shopDomain) return null;
-  if (Date.now() > payload.exp) return null;
+  const exp = Number(expStr);
+  if (!shopDomain || !targetAccountId || !exp) return null;
+  if (Date.now() > exp) return null;
+  return { shopDomain, targetAccountId, exp };
+}
+
+// Meme verification, mais exige en plus que le ticket ait ete emis pour LA
+// boutique de la session en cours — utilise cote link-request, ou une
+// session live existe et permet de detecter un ticket rejoue sur la
+// mauvaise boutique.
+export function verifyLinkTicket(ticket, shopDomain) {
+  const payload = decodeLinkTicket(ticket);
+  if (!payload || payload.shopDomain !== shopDomain) return null;
   return payload;
 }

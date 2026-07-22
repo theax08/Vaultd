@@ -15,20 +15,21 @@ import { STORE_ADDON_LABEL } from "../vaultd-plans";
 export const loader = async ({ request }) => {
   const url = new URL(request.url);
   const ticket = url.searchParams.get("ticket");
-  const shop = url.searchParams.get("shop") || "";
-  const host = url.searchParams.get("host") || "";
-  const hostParam = host ? `&host=${encodeURIComponent(host)}` : "";
 
-  if (!ticket || !shop) {
-    return redirect(`/app/settings?link=error${hostParam}`);
+  if (!ticket) {
+    return redirect(`/app/settings?link=error`);
   }
 
   let status = "error";
   try {
-    const { verifyLinkTicket, linkShopToAccount } = await import("../vaultd-account.server");
-    const payload = verifyLinkTicket(ticket, shop);
+    const { decodeLinkTicket, linkShopToAccount } = await import("../vaultd-account.server");
+    // No separate ?shop= param (it was pushing returnUrl past Shopify's
+    // 255-char limit) — the shop is read straight from the signed ticket.
+    const payload = decodeLinkTicket(ticket);
 
     if (payload) {
+      const shop = payload.shopDomain;
+
       // The ticket only proves the credentials were checked earlier — it
       // does not prove the add-on charge was actually approved. Confirm
       // with Shopify that this shop's add-on subscription is genuinely
@@ -60,7 +61,7 @@ export const loader = async ({ request }) => {
     console.error("[billing/link-return] linking failed:", err?.message);
   }
 
-  return redirect(`/app/settings?link=${status}${hostParam}`);
+  return redirect(`/app/settings?link=${status}`);
 };
 
 export default function BillingLinkReturnPage() {
