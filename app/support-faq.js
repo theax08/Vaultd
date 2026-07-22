@@ -19,7 +19,7 @@ export const SUPPORT_CATEGORIES = [
       {
         question: "How do referrals affect a customer's waitlist position?",
         answer:
-          "When referrals are enabled on a drop, each confirmed referral adds points to the referrer's score. Scores are used to sort the queue — the higher the score, the closer to the front. You set how many points each successful referral gives in the drop settings. This works on every plan; the automated \"your rank moved up\" email that notifies customers requires the Pro plan or above.",
+          "When referrals are enabled on a drop, each confirmed referral adds points to the referrer's score. Scores are used to sort the queue — the higher the score, the closer to the front. You set how many points each successful referral gives in the drop settings. The referral program requires the Pro plan or above — on Growth, the referral toggle in the drop editor is disabled.",
       },
       {
         question: "How do I see who unsubscribed from a waitlist?",

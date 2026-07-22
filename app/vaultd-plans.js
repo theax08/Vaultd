@@ -39,7 +39,7 @@ export const PLAN_LIMITS = {
 // toutes les cles des paliers inferieurs).
 const PLAN_FEATURE_ADDITIONS = {
   GROWTH: ["waitlist", "waitlist_limit", "drop_history", "hype_widgets"],
-  PRO: ["automated_emails", "color_blue", "color_red"],
+  PRO: ["referral", "automated_emails", "color_blue", "color_red"],
   SCALE: ["automatic_launch", "unlimited_drops", "color_violet"],
   ELITE: ["bot_protection", "multi_store", "priority_support", "color_gold"],
 };
@@ -49,6 +49,7 @@ const FEATURE_LABELS = {
   waitlist_limit: "Waitlist size limit",
   drop_history: "Drop history & analytics",
   hype_widgets: "Hype building widgets",
+  referral: "Referral program",
   automated_emails: "Automated customer emails",
   automatic_launch: "Automatic launch & close",
   bot_protection: "Bot protection",

@@ -11,8 +11,6 @@ export const SECTIONS = [
     tips: [
       "Every signup gets an instant confirmation email — customize it from the Emails page, in the Waitlist Email Rank tab. It's included on every plan.",
       "Share your drop's waitlist link on social media before the drop goes live to build a queue.",
-      "Each entry gets a referral link — sharing it moves people up the list, which naturally drives more signups.",
-      "Referral links are a merchant-side feature: customers have no way to know whether a referral program is active just from the widget. Always announce it explicitly in your drop marketing — email, caption, or story — so customers actually know to share their link.",
       "Customers can see their live position and how many people are ahead of them.",
       "Use the Waitlists page to export or review who joined, and when.",
     ],
@@ -52,6 +50,18 @@ export const SECTIONS = [
       "Widgets only appear on your storefront when a drop exists with status LIVE or DRAFT with a scheduled launch date. If a widget isn't showing, check that a drop is active in Vaultd.",
       "For a clean layout, stack them in this order: Countdown → Social proof → Waitlist form. Each widget has a background color setting in the theme editor so you can match your store's style.",
       "The Social proof widget's \"Progress bar\" design only appears if the drop has a waitlist size limit enabled. Without a capacity set on the drop, the progress bar has no data to display and will stay hidden — use the Simple text or Avatar stack design instead.",
+    ],
+  },
+  {
+    key: "referral",
+    title: "Referral program",
+    minPlan: "PRO",
+    intro: "Let customers move up the waitlist by sharing their referral link.",
+    tips: [
+      "Toggle it on per drop in the drop editor, and set how many positions a successful referral is worth (1 to 3).",
+      "Each waitlist entry gets its own referral link — sharing it moves the referrer up the queue when someone signs up through it.",
+      "Referral links are a merchant-side feature: customers have no way to know a referral program is active just from the widget. Announce it explicitly in your drop marketing — email, caption, or story — so customers know to share their link.",
+      "On Growth, the referral toggle in the drop editor is disabled — upgrade to Pro to turn it on.",
     ],
   },
   {

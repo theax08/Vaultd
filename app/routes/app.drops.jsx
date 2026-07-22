@@ -74,6 +74,7 @@ export const loader = async ({ request }) => {
 
   const canSetWaitlistLimit = PLAN_FEATURES[plan].includes("waitlist_limit");
   const canAutoLaunch = PLAN_FEATURES[plan].includes("automatic_launch");
+  const canUseReferral = PLAN_FEATURES[plan].includes("referral");
 
   // 1) Récupérer tous les drops de cette boutique
   const drops = await db.drop.findMany({
@@ -110,6 +111,7 @@ export const loader = async ({ request }) => {
     dropsLeftThisMonth,
     canSetWaitlistLimit,
     canAutoLaunch,
+    canUseReferral,
   };
 };
 
@@ -153,7 +155,7 @@ export const action = async ({ request }) => {
     const productIds = (formData.get("productIds") || "").toString().trim();
     let autoLaunch = formData.get("autoLaunch") === "on";
     const maxWaitlistSizeRaw = (formData.get("maxWaitlistSize") || "").toString().trim();
-    const referralEnabled = formData.get("referralEnabled") === "on";
+    let referralEnabled = formData.get("referralEnabled") === "on";
     const referralPointsPerShareRaw = (formData.get("referralPointsPerShare") || "1").toString();
 
     let errors = {};
@@ -286,6 +288,11 @@ export const action = async ({ request }) => {
     // L'auto-launch et l'auto-close sont des fonctionnalites Scale+.
     if (!PLAN_FEATURES[plan].includes("automatic_launch")) {
       autoLaunch = false;
+    }
+
+    // Le programme de parrainage est une fonctionnalite Pro+.
+    if (!PLAN_FEATURES[plan].includes("referral")) {
+      referralEnabled = false;
     }
 
     if (intent === "create") {
@@ -481,7 +488,7 @@ function buildDropExternalId(shopDomain, index) {
 // CLIENT: UI Component
 // ==========================================
 export default function DropsPage() {
-  const { drops, shopDomain, dropsLeftThisMonth, canSetWaitlistLimit, canAutoLaunch, maxUnitsPerDrop } = useLoaderData();
+  const { drops, shopDomain, dropsLeftThisMonth, canSetWaitlistLimit, canAutoLaunch, canUseReferral, maxUnitsPerDrop } = useLoaderData();
   const actionData = useActionData();
   const submit = useSubmit();
   const revalidator = useRevalidator();
@@ -1146,7 +1153,7 @@ export default function DropsPage() {
                     <input
                       type="checkbox"
                       name="referralEnabled"
-                      checked={referralEnabled}
+                      checked={canUseReferral && referralEnabled}
                       onChange={() => {}}
                       style={{ display: "none" }}
                       tabIndex={-1}
@@ -1163,18 +1170,27 @@ export default function DropsPage() {
                       <span style={{ fontWeight: 600, color: "#1a1a1a" }}>
                         Allow waitlist referrals
                       </span>
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={referralEnabled}
-                        onClick={() => setReferralEnabled((v) => !v)}
-                        style={toggleSwitchStyle(referralEnabled)}
-                      >
-                        <span style={toggleSwitchKnobStyle(referralEnabled)} />
-                      </button>
+                      {canUseReferral && (
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={referralEnabled}
+                          onClick={() => setReferralEnabled((v) => !v)}
+                          style={toggleSwitchStyle(referralEnabled)}
+                        >
+                          <span style={toggleSwitchKnobStyle(referralEnabled)} />
+                        </button>
+                      )}
                     </div>
 
-                    {referralEnabled && (
+                    {!canUseReferral && (
+                      <p style={{ fontSize: 12.5, color: "#919191", margin: "4px 0 0 0" }}>
+                        Available on Pro and above.{" "}
+                        <a href="/app/plans" style={{ color: "#1a1a1a", fontWeight: 600 }}>View plans →</a>
+                      </p>
+                    )}
+
+                    {canUseReferral && referralEnabled && (
                       <div
                         style={{
                           display: "flex",
