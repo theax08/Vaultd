@@ -933,7 +933,7 @@ export default function LiveDashboardPage() {
         </div>
 
         {/* RIGHT COLUMN */}
-        <div style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
+        <div>
           {/* TRAFFIC SOURCES */}
           <div
             style={{
@@ -1004,44 +1004,6 @@ export default function LiveDashboardPage() {
               orderCount={drop.final.orderCount}
               conversionRate={drop.live.conversionRate}
             />
-          )}
-
-          {isLive && (
-            <div
-              style={{
-                borderRadius: 10,
-                border: "1px solid rgba(129,140,248,0.35)",
-                backgroundColor: "rgba(239,242,255,1)",
-                padding: "13px 15px",
-                marginBottom: 16,
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-                <div
-                  style={{
-                    width: 30,
-                    height: 30,
-                    borderRadius: 8,
-                    backgroundColor: "rgba(129,140,248,0.2)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 14,
-                    flexShrink: 0,
-                  }}
-                >
-                  📊
-                </div>
-                <div style={{ fontSize: 12 }}>
-                  <span style={{ display: "block", fontWeight: 700, color: "#4f46e5", marginBottom: 2, fontSize: 12.5 }}>
-                    Analysis mode unlocks when drop ends
-                  </span>
-                  <span style={{ color: "#4b5563", lineHeight: 1.6 }}>
-                    Total revenue · Top sellers · Avg cart size · Full breakdown available once the drop is saved to history.
-                  </span>
-                </div>
-              </div>
-            </div>
           )}
 
           {/* QUICK SUMMARY (mode analysis simplifié) */}
@@ -1115,11 +1077,6 @@ export default function LiveDashboardPage() {
               border: "1px solid rgba(148,163,184,0.45)",
               backgroundColor: "#f9fafb",
               padding: "13px 15px",
-              flex: 1,
-              minHeight: 130,
-              display: "flex",
-              flexDirection: "column",
-              justifyContent: "center",
             }}
           >
             <div
