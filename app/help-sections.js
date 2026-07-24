@@ -35,7 +35,7 @@ export const SECTIONS = [
       "Compare conversion rate across drops to see which products or pricing convert best.",
       "Sell-out time tells you if you should increase stock or run shorter drop windows.",
       "Use the per-product breakdown to plan inventory for your next drop.",
-      "Traffic source data (Instagram, TikTok, Vaultd Emails, etc.) is recorded by the Vaultd waitlist widget on your storefront page. Each time a visitor loads the page, the widget reads the ?vaultd_src= parameter from the URL and logs the source. If the widget isn't embedded on the page, or the visitor arrives without that parameter (typed the URL directly, followed an untracked link), the visit is counted as 'other' or not recorded at all. Vaultd email links are tagged automatically when sent. For social sources, add ?vaultd_src=instagram or ?vaultd_src=tiktok to any link you share — e.g. your Instagram story swipe-up URL or TikTok bio link.",
+      "Traffic source data (Instagram, TikTok, Vaultd Emails, etc.) is recorded by the Vaultd waitlist widget — only on the page(s) where you've added the Waitlist form block, not your whole store. Each real visit is reported once per browser session (reloading doesn't inflate the count), and previews in the theme editor are excluded. The widget checks the referrer and the ?vaultd_src= URL parameter to attribute the source; a visit with neither (direct link, typed URL) is still counted, just filed under 'other' rather than left out. Vaultd email links are tagged automatically when sent. For social sources, add ?vaultd_src=instagram or ?vaultd_src=tiktok to any link you share — e.g. your Instagram story swipe-up URL or TikTok bio link.",
     ],
   },
   {
