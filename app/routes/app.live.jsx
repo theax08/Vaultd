@@ -712,7 +712,7 @@ export default function LiveDashboardPage() {
         }}
       >
         {/* LEFT COLUMN */}
-        <div>
+        <div style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
           {/* 4 KPI cards row */}
           <div
             style={{
@@ -782,7 +782,8 @@ export default function LiveDashboardPage() {
               overflow: "hidden",
               display: "flex",
               flexDirection: "column",
-              maxHeight: 340,
+              flex: 1,
+              minHeight: 220,
             }}
           >
             <div
@@ -924,15 +925,15 @@ export default function LiveDashboardPage() {
           )}
 
           {mode === "analysis" && (
-            <div style={{ marginTop: 18, display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ marginTop: 18, display: "flex", flexDirection: "column", gap: 14, flex: 1, minHeight: 0 }}>
               <TopSellersBoard topSellers={topSellers} />
-              <DropTimelineBoard timeline={timeline} />
+              <DropTimelineBoard timeline={timeline} style={{ flex: 1, minHeight: 220 }} />
             </div>
           )}
         </div>
 
         {/* RIGHT COLUMN */}
-        <div>
+        <div style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
           {/* TRAFFIC SOURCES */}
           <div
             style={{
@@ -995,6 +996,53 @@ export default function LiveDashboardPage() {
               )}
             </div>
           </div>
+
+          {mode === "speed" && (
+            <ConversionFunnelBoard
+              visitors={drop.live.visitors}
+              waitlistTotal={drop.waitlistTotal}
+              orderCount={drop.final.orderCount}
+              conversionRate={drop.live.conversionRate}
+            />
+          )}
+
+          {isLive && (
+            <div
+              style={{
+                borderRadius: 10,
+                border: "1px solid rgba(129,140,248,0.35)",
+                backgroundColor: "rgba(239,242,255,1)",
+                padding: "13px 15px",
+                marginBottom: 16,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                <div
+                  style={{
+                    width: 30,
+                    height: 30,
+                    borderRadius: 8,
+                    backgroundColor: "rgba(129,140,248,0.2)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 14,
+                    flexShrink: 0,
+                  }}
+                >
+                  📊
+                </div>
+                <div style={{ fontSize: 12 }}>
+                  <span style={{ display: "block", fontWeight: 700, color: "#4f46e5", marginBottom: 2, fontSize: 12.5 }}>
+                    Analysis mode unlocks when drop ends
+                  </span>
+                  <span style={{ color: "#4b5563", lineHeight: 1.6 }}>
+                    Total revenue · Top sellers · Avg cart size · Full breakdown available once the drop is saved to history.
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* QUICK SUMMARY (mode analysis simplifié) */}
           {mode === "analysis" && (
@@ -1067,6 +1115,11 @@ export default function LiveDashboardPage() {
               border: "1px solid rgba(148,163,184,0.45)",
               backgroundColor: "#f9fafb",
               padding: "13px 15px",
+              flex: 1,
+              minHeight: 130,
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "center",
             }}
           >
             <div
@@ -1377,6 +1430,65 @@ function StatRow({ label, value }) {
 }
 
 /**
+ * CONVERSION FUNNEL — anneau SVG (leger, pas de librairie de charts) +
+ * 3 etapes reellement trackees : visiteurs (widget storefront), inscrits
+ * waitlist, acheteurs. Pas d'etapes "page vue"/"panier" inventees — ces
+ * evenements ne sont pas suivis aujourd'hui.
+ */
+function ConversionFunnelBoard({ visitors, waitlistTotal, orderCount, conversionRate }) {
+  const pct = Math.max(0, Math.min(100, conversionRate));
+  const radius = 34;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference * (1 - pct / 100);
+
+  return (
+    <div
+      style={{
+        borderRadius: 12,
+        border: "1px solid rgba(148,163,184,0.45)",
+        backgroundColor: "#f9fafb",
+        padding: "14px 16px",
+        marginBottom: 16,
+      }}
+    >
+      <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#6b7280", marginBottom: 12 }}>
+        Conversion funnel
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        <svg width="84" height="84" viewBox="0 0 84 84" style={{ flexShrink: 0 }}>
+          <circle cx="42" cy="42" r={radius} fill="none" stroke="#e5e7eb" strokeWidth="8" />
+          <circle
+            cx="42"
+            cy="42"
+            r={radius}
+            fill="none"
+            stroke="#4ade80"
+            strokeWidth="8"
+            strokeLinecap="round"
+            strokeDasharray={circumference}
+            strokeDashoffset={offset}
+            transform="rotate(-90 42 42)"
+          />
+          <text x="42" y="38" textAnchor="middle" fontSize="16" fontWeight="800" fill="#111827">
+            {conversionRate.toFixed(1)}%
+          </text>
+          <text x="42" y="52" textAnchor="middle" fontSize="8" fill="#9ca3af">
+            conversion
+          </text>
+        </svg>
+
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
+          <StatRow label="Visitors" value={visitors.toLocaleString("en-US")} />
+          <StatRow label="Joined waitlist" value={waitlistTotal.toLocaleString("en-US")} />
+          <StatRow label="Purchased" value={orderCount.toLocaleString("en-US")} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
  * TOP SELLERS — classement des produits par unites vendues (mode Analysis).
  */
 function TopSellersBoard({ topSellers }) {
@@ -1450,7 +1562,7 @@ function TopSellersBoard({ topSellers }) {
  * DROP TIMELINE — reconstruite a partir des donnees reelles (ouverture, pic
  * de vitesse, alerte stock bas, cloture). Mode Analysis.
  */
-function DropTimelineBoard({ timeline }) {
+function DropTimelineBoard({ timeline, style }) {
   const dotColor = { started: "#16a34a", peak: "#f59e0b", low_stock: "#dc2626", ended: "#6b7280" };
 
   return (
@@ -1460,16 +1572,19 @@ function DropTimelineBoard({ timeline }) {
         border: "1px solid rgba(148,163,184,0.45)",
         backgroundColor: "#f9fafb",
         padding: "14px 16px",
+        display: "flex",
+        flexDirection: "column",
+        ...style,
       }}
     >
-      <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#6b7280", marginBottom: 12 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#6b7280", marginBottom: 12, flexShrink: 0 }}>
         Drop timeline
       </div>
 
       {timeline.length === 0 ? (
         <div style={{ fontSize: 12, color: "#6b7280" }}>Timeline will fill in as this drop progresses.</div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14, flex: 1, minHeight: 0, overflowY: "auto" }}>
           {timeline.map((t, i) => (
             <div key={i} style={{ display: "flex", gap: 10 }}>
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
