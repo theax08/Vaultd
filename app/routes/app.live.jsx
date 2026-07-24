@@ -380,19 +380,21 @@ export default function LiveDashboardPage() {
     }
   }, [drop.status]);
 
-  // Pendant que le drop est live et gere en automatique, on revalide
-  // periodiquement pour detecter l'auto-end sans avoir a rafraichir.
+  // Tant que le drop est live, on revalide periodiquement pour que les
+  // vrais chiffres de vente (revenue, conversion, stock...) se rafraichissent
+  // sans que le marchand ait a recharger la page manuellement — sinon seul
+  // le chrono bouge et le dashboard donne une fausse impression de "live".
   useEffect(() => {
-    if (!isLive || !drop.autoLaunch) return;
+    if (!isLive) return;
 
     const intervalId = setInterval(() => {
       if (revalidator.state === "idle") {
         revalidator.revalidate();
       }
-    }, 30000);
+    }, 15000);
 
     return () => clearInterval(intervalId);
-  }, [isLive, drop.autoLaunch, revalidator]);
+  }, [isLive, revalidator]);
 
   // =========================
   // REAL-TIME CHRONO
