@@ -1,4 +1,5 @@
 import db from "../db.server";
+import { unauthenticated } from "../shopify.server";
 import { getAccountForShop } from "../vaultd-account.server";
 import { PLAN_FEATURES } from "../vaultd-plans";
 
@@ -103,6 +104,25 @@ export const loader = async ({ request }) => {
   const spotsLeft =
     maxWaitlistSize != null ? Math.max(0, maxWaitlistSize - waitlistCount) : null;
 
+  // Une fois LIVE, le widget waitlist remplace son formulaire par un lien
+  // "Buy now" — on resout le handle du premier produit pour construire
+  // cette URL storefront (/products/{handle}).
+  let productHandle = null;
+  if (drop.status === "LIVE" && drop.productIds) {
+    const firstProductId = drop.productIds.split(",")[0]?.trim();
+    if (firstProductId) {
+      try {
+        const { admin } = await unauthenticated.admin(shopDomain);
+        const res = await admin.graphql(
+          `query DropFirstProductHandle($id: ID!) { product(id: $id) { handle } }`,
+          { variables: { id: firstProductId } }
+        );
+        const { data } = await res.json();
+        productHandle = data?.product?.handle ?? null;
+      } catch {}
+    }
+  }
+
   const payload = {
     drop: {
       id: drop.externalId,
@@ -111,6 +131,7 @@ export const loader = async ({ request }) => {
       startTime: drop.startTime,
       endTime: drop.endTime,
       maxWaitlistSize,
+      productHandle,
     },
     waitlistCount,
     recentInitials,

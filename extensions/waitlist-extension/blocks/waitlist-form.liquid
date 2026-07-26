@@ -164,6 +164,13 @@
           </div>
           <p class="waitlist-share-hint-{{ block.id }}">Friends who join with your link move you up the list.</p>
         </div>
+
+        <div id="waitlist-live-{{ block.id }}" class="waitlist-success-{{ block.id }}" style="display:none;">
+          <p class="waitlist-success-position-{{ block.id }}">It's live — get yours now.</p>
+          <div class="waitlist-share-row-{{ block.id }}">
+            <a href="#" id="waitlist-live-link-{{ block.id }}" class="waitlist-live-link-{{ block.id }}">Buy now</a>
+          </div>
+        </div>
       </div>
 
     </div>
@@ -390,11 +397,50 @@
       fetch('/apps/hype/api/track-traffic', { method: 'POST', body: fd }).catch(function() {});
     }
 
+    // Une fois le drop LIVE, il n'y a plus de sens a demander de rejoindre
+    // la waitlist : on remplace le formulaire par un lien d'achat direct.
+    // On sonde toutes les 20s (meme convention que le widget social proof)
+    // pour capter la bascule DRAFT -> LIVE sans que le client recharge la page.
+    const liveEl = document.getElementById('waitlist-live-' + id);
+    const liveLinkEl = document.getElementById('waitlist-live-link-' + id);
+    const headingEl2 = document.querySelector('.waitlist-heading-' + id);
+    const subheadingEl2 = document.querySelector('.waitlist-subheading-' + id);
+    let liveShown = false;
+
+    function showLive(productHandle) {
+      if (liveShown) return;
+      liveShown = true;
+      if (form) form.style.display = 'none';
+      if (successEl) successEl.style.display = 'none';
+      if (headingEl2) headingEl2.style.display = 'none';
+      if (subheadingEl2) subheadingEl2.style.display = 'none';
+      if (liveLinkEl) {
+        liveLinkEl.href = productHandle ? '/products/' + productHandle : '/';
+      }
+      if (liveEl) liveEl.style.display = 'block';
+    }
+
+    function checkLiveStatus(dropId) {
+      const qs = new URLSearchParams();
+      if (dropId) qs.set('dropId', dropId);
+      fetch('/apps/hype/api/drop-status?' + qs.toString())
+        .then(function(res) { return res.ok ? res.json() : null; })
+        .then(function(data) {
+          if (data && data.drop && data.drop.status === 'LIVE') {
+            showLive(data.drop.productHandle);
+          }
+        })
+        .catch(function() {});
+    }
+
+    let resolvedDropId = staticDropId || null;
+
     if (staticDropId && idEl) {
       // Use explicit drop ID from settings
       idEl.value = staticDropId;
       restoreFromStorage(staticDropId);
       reportTrafficSource(staticDropId);
+      checkLiveStatus(staticDropId);
     } else {
       // Fallback to your API to resolve the active drop
       (async function loadActiveDrop() {
@@ -403,16 +449,22 @@
           if (!res.ok) return;
           const data = await res.json();
           if (data && data.drop) {
+            resolvedDropId = data.drop.id;
             if (nameEl) nameEl.textContent = ' for ' + data.drop.name;
             if (idEl) idEl.value = data.drop.id;
             restoreFromStorage(data.drop.id);
             reportTrafficSource(data.drop.id);
+            checkLiveStatus(data.drop.id);
           }
         } catch (e) {
           console.error('Error loading active drop:', e);
         }
       })();
     }
+
+    setInterval(function() {
+      if (!liveShown) checkLiveStatus(resolvedDropId);
+    }, 20000);
 
     // Waitlist form submission
     if (form) {
