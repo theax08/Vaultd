@@ -1,0 +1,79 @@
+{%- comment -%}
+  App embed (target: body) — runs on every storefront page once enabled in
+  Theme > App embeds, no per-page setup needed. Powers the real-time
+  "X on site now" counter on the Live dashboard: while the shop's active
+  drop is LIVE, pings a lightweight in-memory presence endpoint every 15s.
+  Piggybacks on the same /apps/hype/active-drop + /apps/hype/api/drop-status
+  resolution already used by the other widgets, so it needs no configuration.
+{%- endcomment -%}
+<script>
+  (function() {
+    function getVisitorId() {
+      try {
+        let id = sessionStorage.getItem('vaultd_visitor_id');
+        if (!id) {
+          id = 'v_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2);
+          sessionStorage.setItem('vaultd_visitor_id', id);
+        }
+        return id;
+      } catch (e) {
+        return 'v_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2);
+      }
+    }
+
+    const visitorId = getVisitorId();
+    let pingIntervalId = null;
+
+    function pingPresence(dropId) {
+      const fd = new FormData();
+      fd.set('dropId', dropId);
+      fd.set('visitorId', visitorId);
+      fetch('/apps/hype/api/presence-ping', { method: 'POST', body: fd }).catch(function() {});
+    }
+
+    function startPinging(dropId) {
+      if (pingIntervalId) return;
+      pingPresence(dropId);
+      pingIntervalId = setInterval(function() { pingPresence(dropId); }, 15000);
+    }
+
+    function stopPinging() {
+      if (pingIntervalId) {
+        clearInterval(pingIntervalId);
+        pingIntervalId = null;
+      }
+    }
+
+    function checkDrop() {
+      fetch('/apps/hype/active-drop')
+        .then(function(res) { return res.ok ? res.json() : null; })
+        .then(function(data) {
+          if (!data || !data.drop) {
+            stopPinging();
+            return;
+          }
+          fetch('/apps/hype/api/drop-status?dropId=' + encodeURIComponent(data.drop.id))
+            .then(function(res) { return res.ok ? res.json() : null; })
+            .then(function(statusData) {
+              if (statusData && statusData.drop && statusData.drop.status === 'LIVE') {
+                startPinging(data.drop.id);
+              } else {
+                stopPinging();
+              }
+            })
+            .catch(function() {});
+        })
+        .catch(function() {});
+    }
+
+    checkDrop();
+    setInterval(checkDrop, 30000);
+  })();
+</script>
+
+{% schema %}
+{
+  "name": "Vaultd Live Presence",
+  "target": "body"
+}
+{% endschema %}

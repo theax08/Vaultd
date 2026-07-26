@@ -1,5 +1,6 @@
 import { useLoaderData, useRevalidator, Form } from "react-router";
 import { useState, useEffect } from "react";
+import { getActivePresenceCount } from "../presence.server";
 
 // ===============================
 // SERVER: loader – KPIs branchés DB
@@ -268,6 +269,7 @@ export const loader = async ({ request }) => {
     soldPct,
     estimatedSelloutMinutes,
     visitors: visitorsTotal,
+    onSiteNow: drop.status === "LIVE" ? getActivePresenceCount(drop.externalId) : 0,
   };
 
   const selloutTimeSeconds =
@@ -965,13 +967,30 @@ export default function LiveDashboardPage() {
               >
                 Traffic sources
               </div>
-              <div
-                style={{
-                  fontSize: 11,
-                  color: "#6b7280",
-                }}
-              >
-                {drop.live.visitors} visitors
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {isLive && (
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: "#15803d",
+                      backgroundColor: "rgba(74,222,128,0.10)",
+                      border: "1px solid rgba(22,163,74,0.35)",
+                      borderRadius: 20,
+                      padding: "2px 8px",
+                    }}
+                    title="Visitors currently on the site (last 45s)"
+                  >
+                    <span style={{ width: 6, height: 6, borderRadius: "50%", backgroundColor: "#4ade80" }} />
+                    {drop.live.onSiteNow} on site now
+                  </span>
+                )}
+                <div style={{ fontSize: 11, color: "#6b7280" }}>
+                  {drop.live.visitors} visitors
+                </div>
               </div>
             </div>
 
