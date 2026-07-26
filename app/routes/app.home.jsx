@@ -196,7 +196,7 @@ export default function Dashboard() {
               </Link>
             </div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, flex: 1, minHeight: 0, overflowY: "auto" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 400, overflowY: "auto" }}>
               {recentDrops.map((drop) => (
                 <div
                   key={drop.id}
