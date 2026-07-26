@@ -4,11 +4,7 @@ import { useLoaderData, useActionData, useSubmit, Link } from "react-router";
 import { PLAN_ORDER } from "../vaultd-plans";
 import { useState, useEffect } from "react";
 import {
-  pagePopStyle,
-  pageHeaderRowStyle,
-  pageHeaderTitleRowStyle,
-  pageHeaderTitleStyle,
-  GridIcon,
+  popFontFamily,
   cardPadded,
   inputStyle,
   textareaStyle,
@@ -462,7 +458,8 @@ export default function EmailsPage() {
   const sectionIncomplete = !brandName || !hasLogo || !dropExternalId;
 
   return (
-    <div style={pagePopStyle}>
+    <div style={{ position: "fixed", inset: 0, backgroundColor: "#f7f7f7", fontFamily: popFontFamily, display: "flex", flexDirection: "column" }}>
+    <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: 16, display: "flex", flexDirection: "column" }}>
 
       {actionData?.success && (
         <div style={{ marginBottom: 12 }}>
@@ -474,7 +471,7 @@ export default function EmailsPage() {
           <AutoDismissBanner tone="error" message={actionData.error} dismissKey={actionData} />
         </div>
       )}
-      <div style={cardPadded}>
+      <div style={{ ...cardPadded, flex: 1 }}>
           {/* ===== Email customization & automatization ===== */}
           <div
             style={{
@@ -833,6 +830,7 @@ export default function EmailsPage() {
             )
           )}
       </div>
+    </div>
     </div>
   );
 }

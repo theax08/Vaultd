@@ -11,21 +11,14 @@ import {
 } from "../vaultd-account.server";
 import { canUseColor, PLAN_SUMMARIES, COLOR_OPTIONS, PLAN_ORDER } from "../vaultd-plans";
 import {
-  pagePopStyle,
-  pageHeaderRowStyle,
-  pageHeaderTitleRowStyle,
-  pageHeaderTitleStyle,
-  GridIcon,
+  popFontFamily,
   card,
-  cardPadded,
   cardLabel,
   pillBadge,
   inputStyle,
   primaryButtonStyle,
   primaryButtonDisabledStyle,
   secondaryButtonStyle,
-  modalOverlayStyle,
-  modalCardStyle,
   toggleSwitchStyle,
   toggleSwitchKnobStyle,
   successBannerStyle,
@@ -289,7 +282,8 @@ export default function SettingsPage() {
   const isElite = plan === "ELITE";
 
   return (
-    <div style={pagePopStyle}>
+    <div style={{ position: "fixed", inset: 0, backgroundColor: "#f7f7f7", fontFamily: popFontFamily, display: "flex", flexDirection: "column" }}>
+    <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: 16, display: "flex", flexDirection: "column" }}>
 
       {isOnboarding && (
         <div style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 10, padding: "14px 18px", marginBottom: 16 }}>
@@ -332,7 +326,7 @@ export default function SettingsPage() {
         </div>
       )}
 
-      <div style={{ ...card, display: "flex", alignItems: "stretch", padding: 0, overflow: "hidden" }}>
+      <div style={{ ...card, display: "flex", alignItems: "stretch", padding: 0, overflow: "hidden", flex: 1, minHeight: 500 }}>
         {/* Sidebar */}
         <div style={{ width: 200, display: "flex", flexDirection: "column", padding: 14, gap: 4, borderRight: "1px solid #e3e3e3" }}>
           {SECTIONS.map((s) => (
@@ -706,6 +700,7 @@ export default function SettingsPage() {
         </div>
       </div>
 
+    </div>
     </div>
   );
 }

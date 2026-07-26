@@ -64,7 +64,7 @@ export default function HelpPage() {
       </div>
 
       <div style={{ fontSize: 12, color: "#6d7175", padding: "10px 14px", background: "#f9f9f9", borderRadius: 8, border: "1px solid #e3e3e3", marginBottom: 16 }}>
-        <strong style={{ color: "#303030" }}>About Vaultd:</strong> Vaultd is a drop management and analytics tool. It does not process, collect, or handle any payments from your customers. All transactions from your drops happen directly through your Shopify store checkout — Vaultd never touches your revenue.
+        <strong style={{ color: "#303030" }}>About Vaultd:</strong> Vaultd is a drop management and analytics tool. It does not process, collect, or handle any payments from your customers. All transactions from your drops happen directly through your Shopify store checkout.
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
