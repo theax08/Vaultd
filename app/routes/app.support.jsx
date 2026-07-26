@@ -13,7 +13,9 @@ import {
 } from "../support.server";
 import { SUPPORT_CATEGORIES } from "../support-faq";
 import {
-  popFontFamily,
+  pagePopStyle,
+  pageHeaderTitleStyle,
+  GridIcon,
   card,
   pillBadge,
   inputStyle,
@@ -230,26 +232,12 @@ export default function SupportPage() {
   const activeCategory = SUPPORT_CATEGORIES.find((c) => c.key === menuCategory) || null;
 
   return (
-    <div style={{ position: "fixed", inset: 0, backgroundColor: "#f7f7f7", fontFamily: popFontFamily, display: "flex", flexDirection: "column" }}>
-      <Link
-        to={backTo}
-        style={{
-          ...backLinkStyle,
-          position: "absolute",
-          top: 16,
-          left: 24,
-          zIndex: 10,
-          margin: 0,
-          background: "#ffffff",
-          padding: "6px 12px",
-          borderRadius: 8,
-          border: "1px solid #e3e3e3",
-        }}
-      >
+    <div style={{ ...pagePopStyle, display: "flex", flexDirection: "column", minHeight: "calc(100vh - 64px)" }}>
+      <Link to={backTo} style={backLinkStyle}>
         ← Back
       </Link>
 
-      <div style={{ ...card, display: "flex", alignItems: "stretch", flex: 1, minHeight: 0, padding: 0, overflow: "hidden", margin: 16 }}>
+      <div style={{ ...card, display: "flex", alignItems: "stretch", flex: 1, minHeight: 0, padding: 0, overflow: "hidden" }}>
         {/* Sidebar */}
         <div style={{ width: 260, display: "flex", flexDirection: "column", padding: 14, minHeight: 0, borderRight: "1px solid #e3e3e3" }}>
           <input
