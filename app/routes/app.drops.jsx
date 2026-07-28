@@ -324,30 +324,65 @@ export const action = async ({ request }) => {
         }
       }
 
-      // Compte combien de drops existent déjà pour cette boutique
+      // Compte combien de drops existent deja pour cette boutique — sert de
+      // point de depart pour l'index, mais n'est PAS fiable comme source
+      // unique de verite : des suppressions passees peuvent faire retomber
+      // ce compte sur un index deja pris par un drop toujours existant. On
+      // retente avec l'index suivant si la creation echoue sur ce conflit,
+      // plutot que de plafonner sur un compte qui peut mentir.
       const existingCount = await db.drop.count({
         where: { shopDomain },
       });
 
-      const index = existingCount + 1;
-      const externalId = buildDropExternalId(shopDomain, index);
+      let created = false;
+      let attempt = 0;
+      const maxAttempts = 10;
+      while (!created && attempt < maxAttempts) {
+        const index = existingCount + 1 + attempt;
+        const externalId = buildDropExternalId(shopDomain, index);
+        try {
+          await db.drop.create({
+            data: {
+              shopDomain,
+              name,
+              status: "DRAFT",
+              startTime,
+              maxUnits,
+              maxWaitlistSize,
+              description,
+              productIds,
+              externalId,
+              autoLaunch,
+              referralEnabled,
+              referralPointsPerShare,
+            },
+          });
+          created = true;
+        } catch (err) {
+          const isExternalIdConflict =
+            err?.code === "P2002" && err?.meta?.target?.includes?.("externalId");
+          if (!isExternalIdConflict) throw err;
+          attempt += 1;
+        }
+      }
 
-      await db.drop.create({
-        data: {
-          shopDomain,
-          name,
-          status: "DRAFT",
-          startTime,
-          maxUnits,
-          maxWaitlistSize,
-          description,
-          productIds,
-          externalId,
-          autoLaunch,
-          referralEnabled,
-          referralPointsPerShare,
-        },
-      });
+      if (!created) {
+        return {
+          intent,
+          errors: { name: "Couldn't generate a unique drop ID. Please try again." },
+          values: {
+            id: dropId,
+            name,
+            startTime: startTimeRaw,
+            description,
+            productIds,
+            autoLaunch,
+            maxWaitlistSize: maxWaitlistSizeRaw,
+            referralEnabled,
+            referralPointsPerShare,
+          },
+        };
+      }
     } else if (intent === "update") {
       // On ne recalcule le stock que si le drop n'a pas encore demarre : une
       // fois LIVE/ENDED, maxUnits doit rester fige (sinon les stats de vente
