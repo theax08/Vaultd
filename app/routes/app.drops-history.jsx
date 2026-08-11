@@ -1,6 +1,8 @@
 import React from "react";
 import { useLoaderData, Link } from "react-router";
-import { GridIcon, pageHeaderTitleStyle, HighlightText } from "../styles/pop-ui";
+import { GridIcon, pageHeaderTitleStyle, HighlightText, PlanLockedPage } from "../styles/pop-ui";
+import { getAccountForShop } from "../vaultd-account.server";
+import { PLAN_ORDER } from "../vaultd-plans";
 
 export const loader = async ({ request }) => {
   const [{ authenticate }, dbModule] = await Promise.all([
@@ -17,6 +19,22 @@ export const loader = async ({ request }) => {
 
   const { session } = await authenticate.admin(request);
   const shopDomain = session.shop;
+
+  const account = await getAccountForShop(shopDomain);
+  const plan = PLAN_ORDER.includes(account?.plan) ? account.plan : null;
+  if (!plan) {
+    return {
+      locked: true,
+      drops: [],
+      summary: {
+        totalRevenueAllDrops: 0,
+        dropsCompleted: 0,
+        avgConvRate: null,
+        avgSelloutTime: null,
+        fastestSelloutTime: null,
+      },
+    };
+  }
 
   const { runAutoDropLifecycle } = await import("../drop-lifecycle.server");
   await runAutoDropLifecycle(shopDomain);
@@ -271,7 +289,7 @@ function sortValue(drop, key) {
 }
 
 export default function DropsHistoryPage() {
-  const { drops, summary } = useLoaderData();
+  const { locked, drops, summary } = useLoaderData();
 
   const [search, setSearch] = React.useState("");
   const [statusFilter, setStatusFilter] = React.useState([]);
@@ -310,6 +328,15 @@ export default function DropsHistoryPage() {
 
     return filtered;
   }, [drops, search, statusFilter, sortKey, sortDir]);
+
+  if (locked) {
+    return (
+      <PlanLockedPage
+        planName="Growth"
+        description="Choose a plan to view your drop history and analytics."
+      />
+    );
+  }
 
   // Formattage des KPI de header
   const totalRevenueLabel = `$${summary.totalRevenueAllDrops.toLocaleString(

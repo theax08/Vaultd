@@ -31,8 +31,8 @@ export const loader = async ({ request }) => {
 
   if (!account) {
     const host = url.searchParams.get("host") || "";
-    const hostParam = host ? `?host=${encodeURIComponent(host)}` : "";
-    return redirect(`/app/settings${hostParam}`);
+    const hostParam = host ? `&host=${encodeURIComponent(host)}` : "";
+    return redirect(`/app/settings?onboarding=1${hostParam}`);
   }
 
   const startOfMonth = new Date();
@@ -269,7 +269,9 @@ export default function Dashboard() {
             <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--vaultd-accent, #1a1a1a)", marginBottom: 4 }}>
               Your plan
             </div>
-            <p style={{ fontSize: 13, fontWeight: 600, color: "#1a1a1a", margin: "0 0 8px 0" }}>{planSummary?.label}</p>
+            <p style={{ fontSize: 13, fontWeight: 600, color: "#1a1a1a", margin: "0 0 8px 0" }}>
+              {planSummary?.label ?? "No active plan"}
+            </p>
             {plan && (() => {
               const features = getPlanFeatureList(plan);
               const preview = features.slice(0, 4);

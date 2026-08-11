@@ -27,6 +27,7 @@ import {
   toggleSwitchKnobStyle,
   modalOverlayStyle,
   modalCardStyle,
+  PlanLockedPage,
 } from "../styles/pop-ui";
 import { getAccountForShop } from "../vaultd-account.server";
 import { PLAN_LIMITS, PLAN_FEATURES, PLAN_ORDER } from "../vaultd-plans";
@@ -57,7 +58,16 @@ export const loader = async ({ request }) => {
   const account = await getAccountForShop(shopDomain);
   const plan = PLAN_ORDER.includes(account?.plan) ? account.plan : null;
   if (!plan) {
-    return redirect("/app/plans");
+    return {
+      locked: true,
+      drops: [],
+      shopDomain,
+      maxUnitsPerDrop: null,
+      dropsLeftThisMonth: null,
+      canSetWaitlistLimit: false,
+      canAutoLaunch: false,
+      canUseReferral: false,
+    };
   }
   const limits = PLAN_LIMITS[plan];
 
@@ -523,7 +533,7 @@ function buildDropExternalId(shopDomain, index) {
 // CLIENT: UI Component
 // ==========================================
 export default function DropsPage() {
-  const { drops, shopDomain, dropsLeftThisMonth, canSetWaitlistLimit, canAutoLaunch, canUseReferral, maxUnitsPerDrop } = useLoaderData();
+  const { locked, drops, shopDomain, dropsLeftThisMonth, canSetWaitlistLimit, canAutoLaunch, canUseReferral, maxUnitsPerDrop } = useLoaderData();
   const actionData = useActionData();
   const submit = useSubmit();
   const revalidator = useRevalidator();
@@ -779,6 +789,15 @@ export default function DropsPage() {
     formData.append("dropId", dropToDelete.id);
     submit(formData, { method: "post" });
   };
+
+  if (locked) {
+    return (
+      <PlanLockedPage
+        planName="Growth"
+        description="Choose a plan to start creating drops and building your waitlist."
+      />
+    );
+  }
 
   return (
     <div style={pagePopStyle}>

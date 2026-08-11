@@ -3,6 +3,7 @@
 // dupliquer les memes hex/radius dans chaque page admin.
 
 import { useEffect, useState } from "react";
+import { Link } from "react-router";
 
 export const popFontFamily =
   'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", sans-serif';
@@ -325,6 +326,28 @@ export function AutoDismissBanner({ message, tone = "success", dismissKey, style
   return (
     <div style={{ ...(tone === "error" ? errorBannerStyle : successBannerStyle), ...style }}>
       {message}
+    </div>
+  );
+}
+
+// Vaultd est entierement payant — sans plan actif, une page feature (Drops,
+// Waitlists, Live, Drops History...) doit afficher ceci a la place de son
+// contenu reel, plutot que de rediriger (les redirections serveur cassent la
+// navigation embarquee et ont deja cause des boucles par le passe).
+export function PlanLockedPage({ planName = "Growth", description }) {
+  return (
+    <div style={pagePopStyle}>
+      <div style={{ ...cardPadded, textAlign: "center", padding: "56px 24px" }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: "#1a1a1a", marginBottom: 8 }}>
+          Available on the {planName} plan
+        </div>
+        <p style={{ fontSize: 13.5, color: "#6d7175", margin: "0 auto 22px", maxWidth: 380 }}>
+          {description}
+        </p>
+        <Link to="/app/plans" style={{ ...primaryButtonStyle, display: "inline-block", textDecoration: "none" }}>
+          View plans →
+        </Link>
+      </div>
     </div>
   );
 }

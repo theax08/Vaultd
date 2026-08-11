@@ -12,7 +12,10 @@ import {
   cardLabel,
   pillBadge,
   secondaryButtonStyle,
+  PlanLockedPage,
 } from "../styles/pop-ui";
+import { getAccountForShop } from "../vaultd-account.server";
+import { PLAN_ORDER } from "../vaultd-plans";
 
 // ==========================================
 // SERVER: loader – Récupère & trie les données
@@ -32,6 +35,13 @@ export const loader = async ({ request }) => {
 
   const { session } = await authenticate.admin(request);
   const shopDomain = session.shop;
+
+  const account = await getAccountForShop(shopDomain);
+  const plan = PLAN_ORDER.includes(account?.plan) ? account.plan : null;
+  if (!plan) {
+    return { locked: true, shopDomain, waitlists: [] };
+  }
+
   const drops = await db.drop.findMany({
     where: { shopDomain },
     include: {
@@ -114,7 +124,7 @@ function sortValue(item, key) {
 }
 
 export default function WaitlistsPage() {
-  const { shopDomain, waitlists } = useLoaderData();
+  const { locked, shopDomain, waitlists } = useLoaderData();
   const [expandedCards, setExpandedCards] = useState({});
   const [expandedUnsub, setExpandedUnsub] = useState({});
 
@@ -122,6 +132,15 @@ export default function WaitlistsPage() {
   const [sortOpen, setSortOpen] = useState(false);
   const [sortKey, setSortKey] = useState("date");
   const [sortDir, setSortDir] = useState("desc");
+
+  if (locked) {
+    return (
+      <PlanLockedPage
+        planName="Growth"
+        description="Choose a plan to view and manage your drop waitlists."
+      />
+    );
+  }
 
   const visibleWaitlists = waitlists
     .filter((item) => {

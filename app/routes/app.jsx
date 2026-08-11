@@ -50,8 +50,8 @@ export default function App() {
     setMounted(true);
   }, []);
 
-  return (
-    <AppProvider embedded apiKey={apiKey}>
+  const inner = (
+    <>
       <style dangerouslySetInnerHTML={{ __html: GLOBAL_POP_CSS }} />
       {mounted && (
         <s-app-nav>
@@ -68,6 +68,21 @@ export default function App() {
       <div style={{ "--vaultd-accent": accentColor, position: "relative" }}>
         <Outlet />
       </div>
+    </>
+  );
+
+  // AppProvider renders raw <script src> tags with no React context of its
+  // own (see node_modules AppProvider.tsx). SSR hoists those to <link
+  // rel="preload">, but the client's initial render would still emit real
+  // <script> tags at the same spot -> structural mismatch -> React #418/#423
+  // during hydration, which kills App Bridge's nav listener. Deferring
+  // AppProvider until after mount keeps SSR and the first client render
+  // identical (no scripts at all); App Bridge attaches ~one tick later.
+  if (!mounted) return inner;
+
+  return (
+    <AppProvider embedded apiKey={apiKey}>
+      {inner}
     </AppProvider>
   );
 }
