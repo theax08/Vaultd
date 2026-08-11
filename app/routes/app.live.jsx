@@ -1,6 +1,9 @@
 import { useLoaderData, useRevalidator, Form } from "react-router";
 import { useState, useEffect } from "react";
 import { getActivePresenceCount } from "../presence.server";
+import { getAccountForShop } from "../vaultd-account.server";
+import { PLAN_ORDER } from "../vaultd-plans";
+import { PlanLockedPage } from "../styles/pop-ui";
 
 // ===============================
 // SERVER: loader – KPIs branchés DB
@@ -20,6 +23,37 @@ export const loader = async ({ request }) => {
 
   const { session } = await authenticate.admin(request);
   const shopDomain = session.shop;
+
+  // Un marchand qui a annule/downgrade son plan garde ses anciens drops, donc
+  // cette page reste atteignable a 0 plan actif — meme verrou inline que les
+  // autres pages. Le placeholder `drop` doit exister car les hooks du
+  // composant lisent drop.status/startTime avant le branchement locked.
+  const account = await getAccountForShop(shopDomain);
+  const planForGate = PLAN_ORDER.includes(account?.plan) ? account.plan : null;
+  if (!planForGate) {
+    return {
+      locked: true,
+      drop: {
+        id: null,
+        name: "",
+        status: "DRAFT",
+        shopName: "",
+        startTime: null,
+        endTime: null,
+        maxUnits: 0,
+        totalItems: 0,
+        description: "",
+        waitlistTotal: 0,
+        live: {},
+        final: {},
+        autoLaunch: false,
+      },
+      whoIsBuying: [],
+      traffic: {},
+      topSellers: [],
+      timeline: [],
+    };
+  }
 
   // Auto-launch / auto-end : la live page est la plus probable a etre ouverte
   // pendant un drop, donc on y verifie aussi le cycle de vie automatique.
@@ -354,7 +388,7 @@ export const loader = async ({ request }) => {
 // CLIENT: Live Overlay UI
 // ===============================
 export default function LiveDashboardPage() {
-  const { drop, whoIsBuying, traffic, topSellers, timeline } = useLoaderData();
+  const { locked, drop, whoIsBuying, traffic, topSellers, timeline } = useLoaderData();
   const revalidator = useRevalidator();
 
   // L'app affiche tout en USD, sans conversion.
@@ -427,6 +461,17 @@ export default function LiveDashboardPage() {
 
     return () => clearInterval(intervalId);
   }, [isTimerRunning]);
+
+  // Apres tous les hooks (Rules of Hooks : ils doivent tourner a chaque
+  // rendu, meme verrouille — le placeholder du loader les alimente).
+  if (locked) {
+    return (
+      <PlanLockedPage
+        planName="Growth"
+        description="Choose a plan to access the live drop dashboard."
+      />
+    );
+  }
 
   // Utilitaire pour afficher HH:MM:SS
   function formatChrono(totalSeconds) {
