@@ -4,4 +4,10 @@ import tsconfigPaths from "vite-tsconfig-paths";
 
 export default defineConfig({
   plugins: [reactRouter(), tsconfigPaths()],
+  define: {
+    "process.env.NODE_ENV": JSON.stringify("development"),
+  },
+  build: {
+    minify: false,
+  },
 });
