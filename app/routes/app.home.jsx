@@ -30,9 +30,12 @@ export const loader = async ({ request }) => {
   } catch {}
 
   if (!account) {
-    const host = url.searchParams.get("host") || "";
-    const hostParam = host ? `&host=${encodeURIComponent(host)}` : "";
-    return redirect(`/app/settings?onboarding=1${hostParam}`);
+    // Forward every original param (shop, host, embedded...) — App Bridge
+    // throws "missing required configuration fields: shop" if `shop` isn't
+    // in the URL, which a hand-picked param list here previously dropped.
+    const params = new URLSearchParams(url.searchParams);
+    params.set("onboarding", "1");
+    return redirect(`/app/settings?${params.toString()}`);
   }
 
   const startOfMonth = new Date();
