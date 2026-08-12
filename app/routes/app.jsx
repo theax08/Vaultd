@@ -1,5 +1,4 @@
 import { Outlet, useLoaderData, useRouteError } from "react-router";
-import { useState, useEffect } from "react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
 import { authenticate } from "../shopify.server";
@@ -44,20 +43,18 @@ export const loader = async ({ request }) => {
 
 export default function App() {
   const { apiKey, accentColor, features } = useLoaderData();
-  const [mounted, setMounted] = useState(false);
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  const inner = (
-    <>
+  // AppProvider just renders <script> tags for App Bridge/Polaris (no React
+  // context — see node_modules AppProvider.tsx) and needs to mount
+  // immediately: Shopify admin's shell looks for s-app-nav / waits for App
+  // Bridge's ready signal early, so deferring this past first paint left
+  // s-app-nav sitting unrecognized as raw text instead of being relocated
+  // into native chrome. The React 18.3 this app runs on doesn't have React
+  // 19's script-hoisting-on-SSR behavior anyway, so there was never a
+  // hydration-mismatch risk here to defer against.
+  return (
+    <AppProvider embedded apiKey={apiKey}>
       <style dangerouslySetInnerHTML={{ __html: GLOBAL_POP_CSS }} />
-      {/* s-app-nav/s-link are plain custom elements (no <script> tags of
-          their own), so unlike AppProvider they carry no hydration risk —
-          gating them behind `mounted` only delayed them past the point
-          where Shopify admin's shell looks for s-app-nav to relocate into
-          its native chrome, leaving raw unupgraded text in the iframe. */}
       <s-app-nav>
         <s-link href="/app/home">Home</s-link>
         <s-link href="/app/drops">Drops</s-link>
@@ -71,21 +68,6 @@ export default function App() {
       <div style={{ "--vaultd-accent": accentColor, position: "relative" }}>
         <Outlet />
       </div>
-    </>
-  );
-
-  // AppProvider renders raw <script src> tags with no React context of its
-  // own (see node_modules AppProvider.tsx). SSR hoists those to <link
-  // rel="preload">, but the client's initial render would still emit real
-  // <script> tags at the same spot -> structural mismatch -> React #418/#423
-  // during hydration, which kills App Bridge's nav listener. Deferring
-  // AppProvider until after mount keeps SSR and the first client render
-  // identical (no scripts at all); App Bridge attaches ~one tick later.
-  if (!mounted) return inner;
-
-  return (
-    <AppProvider embedded apiKey={apiKey}>
-      {inner}
     </AppProvider>
   );
 }
