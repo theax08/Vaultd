@@ -53,18 +53,21 @@ export default function App() {
   const inner = (
     <>
       <style dangerouslySetInnerHTML={{ __html: GLOBAL_POP_CSS }} />
-      {mounted && (
-        <s-app-nav>
-          <s-link href="/app/home">Home</s-link>
-          <s-link href="/app/drops">Drops</s-link>
-          <s-link href="/app/waitlists">Waitlists</s-link>
-          {features.includes("waitlist") && (
-            <s-link href="/app/emails">Emails</s-link>
-          )}
-          <s-link href="/app/drops-history">Drops History</s-link>
-          <s-link href="/app/settings">Settings</s-link>
-        </s-app-nav>
-      )}
+      {/* s-app-nav/s-link are plain custom elements (no <script> tags of
+          their own), so unlike AppProvider they carry no hydration risk —
+          gating them behind `mounted` only delayed them past the point
+          where Shopify admin's shell looks for s-app-nav to relocate into
+          its native chrome, leaving raw unupgraded text in the iframe. */}
+      <s-app-nav>
+        <s-link href="/app/home">Home</s-link>
+        <s-link href="/app/drops">Drops</s-link>
+        <s-link href="/app/waitlists">Waitlists</s-link>
+        {features.includes("waitlist") && (
+          <s-link href="/app/emails">Emails</s-link>
+        )}
+        <s-link href="/app/drops-history">Drops History</s-link>
+        <s-link href="/app/settings">Settings</s-link>
+      </s-app-nav>
       <div style={{ "--vaultd-accent": accentColor, position: "relative" }}>
         <Outlet />
       </div>
