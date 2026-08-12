@@ -336,8 +336,16 @@ export function AutoDismissBanner({ message, tone = "success", dismissKey, style
 // navigation embarquee et ont deja cause des boucles par le passe).
 export function PlanLockedPage({ planName = "Growth", description }) {
   return (
-    <div style={pagePopStyle}>
-      <div style={{ ...cardPadded, textAlign: "center", padding: "56px 24px" }}>
+    <div
+      style={{
+        ...pagePopStyle,
+        minHeight: "70vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <div style={{ ...cardPadded, textAlign: "center", padding: "56px 24px", width: "100%", maxWidth: 460 }}>
         <div style={{ fontSize: 16, fontWeight: 700, color: "#1a1a1a", marginBottom: 8 }}>
           Available on the {planName} plan
         </div>
