@@ -379,6 +379,17 @@ export const GLOBAL_POP_CSS = `
   .vd-drop--live::before      { background: var(--vd-live); }
   .vd-drop--ended::before     { background: var(--vd-ended); }
 
+  /* Emails screen — etat d'une automatisation (VAULTD-DESIGN-emails.md 8.10).
+     Namespace separe des .vd-pill--live/draft/scheduled/ended : ceux-la
+     restent reserves a l'etat d'un DROP, jamais a une automatisation.
+     Actif = etat normal, ne doit pas sauter aux yeux. Inactif = ce qui
+     merite d'etre vu (rien ne part). */
+  .vd-pill--auto-active { background: transparent; color: var(--vd-ink-2); }
+  .vd-pill--auto-active .vd-dot { background: var(--vd-ink-2); }
+
+  .vd-pill--auto-inactive { background: var(--vd-sched-bg); color: var(--vd-sched-fg); }
+  .vd-pill--auto-inactive .vd-dot { background: transparent; box-shadow: inset 0 0 0 1.5px var(--vd-sched-fg); }
+
   /* Emails screen — clickable {{tag}} chips (VAULTD-DESIGN-emails.md 8.4) */
   .vd-tag-chip { transition: box-shadow .12s ease, background-color .12s ease; }
   .vd-tag-chip:hover { background: #ffffff !important; box-shadow: var(--vd-ring-hover); }

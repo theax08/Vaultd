@@ -27,6 +27,24 @@ const TYPES = {
 const SUBJECT_RECOMMENDED_LIMIT = 60;
 const PREVIEW_SAMPLE_POSITION = 248;
 
+// Anti-abus basique sur "Send a test" — en memoire (un seul process Railway),
+// pas besoin de plus pour une fonctionnalite a faible enjeu.
+const TEST_SEND_LIMIT = 3;
+const TEST_SEND_WINDOW_MS = 60_000;
+const testSendLog = new Map(); // shopDomain -> timestamps[]
+
+function isTestSendRateLimited(shopDomain) {
+  const now = Date.now();
+  const recent = (testSendLog.get(shopDomain) || []).filter((t) => now - t < TEST_SEND_WINDOW_MS);
+  testSendLog.set(shopDomain, recent);
+  return recent.length >= TEST_SEND_LIMIT;
+}
+function recordTestSend(shopDomain) {
+  const recent = testSendLog.get(shopDomain) || [];
+  recent.push(Date.now());
+  testSendLog.set(shopDomain, recent);
+}
+
 // ==========================================
 // SERVER: loader – Charge ou initialise EmailAutomations
 // ==========================================
@@ -236,7 +254,7 @@ export const action = async ({ request }) => {
   }
 
   // Envoie un test avec les valeurs actuellement affichees (pas forcement
-  // sauvegardees) a l'adresse du compte Vaultd du marchand.
+  // sauvegardees) a l'adresse choisie par le marchand.
   if (intent === "SEND_TEST") {
     const id = formData.get("id")?.toString();
     const type = formData.get("type")?.toString();
@@ -245,27 +263,29 @@ export const action = async ({ request }) => {
     const brandName = formData.get("brandName")?.toString() || "";
     const mainColor = formData.get("mainColor")?.toString() || "#1a1a1a";
     const ctaUrl = formData.get("ctaUrl")?.toString() || null;
-    const dropName = formData.get("dropName")?.toString() || "Sample Drop";
+    const dropName = formData.get("dropName")?.toString() || "";
+    const to = formData.get("to")?.toString().trim() || "";
 
-    const [{ getAccountForShop }, emailAutomations, { buildLogoUrl }] = await Promise.all([
-      import("../vaultd-account.server"),
+    if (!dropName) {
+      return { intent, error: "Choose a preview drop before sending a test." };
+    }
+    if (!to || !/^\S+@\S+\.\S+$/.test(to)) {
+      return { intent, error: "Enter a valid email address to send the test to." };
+    }
+    if (isTestSendRateLimited(shopDomain)) {
+      return { intent, error: "Too many test emails sent — wait a minute and try again." };
+    }
+
+    const [emailAutomations, { buildLogoUrl }] = await Promise.all([
       import("../email-automations.server"),
       import("../unsubscribe.server"),
     ]);
-
-    const account = await getAccountForShop(shopDomain);
-    if (!account?.email) {
-      return {
-        intent,
-        error: "Add an email to your Vaultd account in Settings first — that's where test emails go.",
-      };
-    }
 
     const automation = id ? await db.emailAutomation.findUnique({ where: { id } }) : null;
     const boutiqueLogo = automation ? buildLogoUrl(automation) : "";
 
     const shared = {
-      to: account.email,
+      to,
       boutiqueName: brandName,
       boutiqueLogo,
       brandColor: mainColor,
@@ -308,7 +328,72 @@ export const action = async ({ request }) => {
       return { intent, error: "Could not send the test email. Try again in a moment." };
     }
 
-    return { intent, success: true };
+    recordTestSend(shopDomain);
+    return { intent, success: true, to };
+  }
+
+  // Rendu HTML reel (email-templates.js) pour l'apercu — les memes fonctions
+  // que celles utilisees pour un vrai envoi, donc l'apercu ne peut pas
+  // diverger du rendu final.
+  if (intent === "RENDER_PREVIEW") {
+    const type = formData.get("type")?.toString();
+    const subject = formData.get("subject")?.toString() || "";
+    const body = formData.get("body")?.toString() || "";
+    const brandName = formData.get("brandName")?.toString() || "";
+    const mainColor = formData.get("mainColor")?.toString() || "#1a1a1a";
+    const logoUrl = formData.get("logoUrl")?.toString() || "";
+    const ctaUrl = formData.get("ctaUrl")?.toString() || "";
+    const dropName = formData.get("dropName")?.toString() || "Your Drop";
+
+    const templates = await import("../email-templates");
+    const vars = { drop_name: dropName, position: PREVIEW_SAMPLE_POSITION, brand_name: brandName, access_link: ctaUrl };
+    const resolvedSubject = templates.renderTemplate(subject, vars);
+    const bodyText = templates.renderTemplate(body, vars);
+
+    const shared = {
+      boutiqueName: brandName,
+      boutiqueLogo: logoUrl,
+      brandColor: mainColor,
+      bodyText,
+      dropName,
+      unsubscribeUrl: "#",
+    };
+
+    let html = "";
+    if (type === TYPES.WAITLIST_CONFIRMATION) {
+      html = templates.renderWaitlistConfirmationEmail({ ...shared, position: PREVIEW_SAMPLE_POSITION });
+    } else if (type === TYPES.WAITLIST_RANK_UPDATE) {
+      html = templates.renderWaitlistRankUpdateEmail({
+        ...shared,
+        position: PREVIEW_SAMPLE_POSITION,
+        previousPosition: PREVIEW_SAMPLE_POSITION + 5,
+      });
+    } else if (type === TYPES.DROP_LIVE) {
+      html = templates.renderDropLiveEmail({
+        ...shared,
+        position: PREVIEW_SAMPLE_POSITION,
+        openedLabel: new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
+        closesInLabel: "6h",
+        accessLink: ctaUrl || "#",
+        linkValidHoursLabel: "6 hours",
+        maxUnits: 30,
+      });
+    } else if (type === TYPES.DROP_ENDED) {
+      html = templates.renderDropEndedEmail({
+        ...shared,
+        soldOut: true,
+        closedAtLabel: new Date().toLocaleString("en-US"),
+        itemsSold: 30,
+        selloutLabel: "6h03m",
+        waitlistCount: PREVIEW_SAMPLE_POSITION,
+        nextDropName: "Drop 02",
+        nextDropCtaUrl: ctaUrl || "#",
+      });
+    } else {
+      return { intent, error: "Unknown email type." };
+    }
+
+    return { intent, success: true, type, html, subject: resolvedSubject };
   }
 
   return { intent, success: false };
@@ -317,10 +402,10 @@ export const action = async ({ request }) => {
 // ==========================================
 // CLIENT: UI – Page Emails
 // ==========================================
-// Plan minimum par étape : waitlist = GROWTH+, live/ended = PRO+.
-// rank_update n'est pas une étape mais une carte a l'interieur de l'etape
-// waitlist (email de mise a jour de position/referral) — reservee a PRO+,
-// meme si la carte de confirmation de waitlist reste dispo des GROWTH.
+// Plan minimum par groupe : waitlist = GROWTH+, live/ended = PRO+.
+// rank_update n'est pas un groupe mais un e-mail a l'interieur du groupe
+// waitlist (mise a jour de position/referral) — reservee a PRO+, meme si
+// la confirmation de waitlist reste dispo des GROWTH.
 const STEP_MIN_PLAN = { waitlist: "GROWTH", rank_update: "PRO", live: "PRO", ended: "PRO" };
 
 function isStepLocked(stepId, plan) {
@@ -330,17 +415,20 @@ function isStepLocked(stepId, plan) {
   return planIdx < minIdx; // -1 si plan null → toujours locked
 }
 
-const SEQUENCE_STEPS = [
-  { id: "waitlist", label: "Waitlist", condition: "Sent when someone joins the waitlist" },
-  { id: "live", label: "Drop live", condition: "Sent when a drop goes live" },
-  { id: "ended", label: "After the drop", condition: "Sent when a drop ends" },
+// Groupes = contextes (axe horizontal), pas une sequence — seuls les
+// e-mails A L'INTERIEUR d'un groupe forment une chaine dans le temps
+// (VAULTD-DESIGN-emails.md 8.12).
+const GROUPS = [
+  { id: "waitlist", label: "Waitlist", types: [TYPES.WAITLIST_CONFIRMATION, TYPES.WAITLIST_RANK_UPDATE] },
+  { id: "live", label: "Drop live", types: [TYPES.DROP_LIVE] },
+  { id: "ended", label: "After the drop", types: [TYPES.DROP_ENDED] },
 ];
 
 // Config d'affichage par type
 const CONFIG_BY_TYPE = {
   [TYPES.WAITLIST_CONFIRMATION]: {
     title: "Instant confirmation",
-    description: "Sent automatically when a customer joins the waitlist.",
+    description: "Sent when a customer joins the waitlist.",
     meta: ["{{drop_name}}", "{{position}}", "{{brand_name}}"],
   },
   [TYPES.WAITLIST_RANK_UPDATE]: {
@@ -362,22 +450,18 @@ const CONFIG_BY_TYPE = {
   },
 };
 
-function resolvePreviewText(text, { dropName, brandName, defaultShopName, ctaUrl }) {
-  if (!text) return "";
-  return text
-    .split("{{drop_name}}").join(dropName || "Your Drop")
-    .split("{{position}}").join(String(PREVIEW_SAMPLE_POSITION))
-    .split("{{brand_name}}").join(brandName || defaultShopName)
-    .split("{{access_link}}").join(ctaUrl || "https://your-store.myshopify.com");
+function unlockedTypesInGroup(group, plan) {
+  return group.types.filter((t) => !isStepLocked(t === TYPES.WAITLIST_RANK_UPDATE ? "rank_update" : group.id, plan));
 }
 
-// Pastille d'activation — section 8.2 : un état n'est pas un statut système,
-// c'est une conséquence ("Inactive — no emails sent"), pas d'un mot de jargon.
-function ActivePill({ active, countLabel }) {
+// Pastille d'activation (8.10, corrigee) — actif est l'etat normal, il ne
+// doit pas sauter aux yeux ; inactif est ce qui merite d'etre vu (rien ne
+// part). Namespace .vd-pill--auto-* separe de l'etat d'un drop.
+function ActivePill({ active, label }) {
   return (
-    <span className={`vd-pill vd-pill--${active ? "live" : "draft"}`}>
+    <span className={`vd-pill vd-pill--auto-${active ? "active" : "inactive"}`}>
       <span className="vd-dot" />
-      {countLabel ?? (active ? "Active" : "Inactive — no emails sent")}
+      {label ?? (active ? "Active" : "Inactive — no emails sent")}
     </span>
   );
 }
@@ -399,7 +483,7 @@ function LockedCard({ title, description, planName }) {
   );
 }
 
-function LockedStepPanel({ planName }) {
+function LockedGroupPanel({ planName }) {
   return (
     <div style={{ ...cardPadded, textAlign: "center", padding: "32px 20px" }}>
       <div style={{ fontSize: 14.5, fontWeight: 700, color: "#1a1a1a", marginBottom: 6 }}>
@@ -421,10 +505,11 @@ export default function EmailsPage() {
   const submit = useSubmit();
   const toggleFetcher = useFetcher();
   const testFetcher = useFetcher();
+  const previewFetcher = useFetcher();
 
   const baseAutomation = automationsByType[TYPES.WAITLIST_CONFIRMATION];
 
-  // ---- Modèle (brand + copy) — géré par la SaveBar ----
+  // ---- Modèle (brand + couleur + logo + drop d'aperçu) — géré par la SaveBar ----
   const [brandName, setBrandName] = useState(baseAutomation.brandName || "");
   const [mainColor, setMainColor] = useState(baseAutomation.mainColor || "#1a1a1a");
   const [logoUrl, setLogoUrl] = useState(baseAutomation.logoUrl || "");
@@ -562,16 +647,22 @@ export default function EmailsPage() {
     }
   }, [isDirty]);
 
-  // ---- Sequence / accordion ----
-  const [openStepId, setOpenStepId] = useState("waitlist");
-  const [previewType, setPreviewType] = useState(TYPES.WAITLIST_CONFIRMATION);
+  // ---- Navigation : onglets horizontaux (groupe) + accordéon vertical (e-mail) ----
+  const [selectedGroupId, setSelectedGroupId] = useState("waitlist");
+  const selectedGroup = GROUPS.find((g) => g.id === selectedGroupId);
+  const [openEmailType, setOpenEmailType] = useState(TYPES.WAITLIST_CONFIRMATION);
   const [previewMode, setPreviewMode] = useState("desktop");
 
   const handleSubjectChange = (type, value) => setSubjects((prev) => ({ ...prev, [type]: value }));
   const handleBodyChange = (type, value) => setBodies((prev) => ({ ...prev, [type]: value }));
   const handleCtaUrlChange = (type, value) => setCtaUrls((prev) => ({ ...prev, [type]: value }));
 
+  // ---- Envoyer un test — destinataire modifiable, drop d'aperçu obligatoire ----
+  const [testEmail, setTestEmail] = useState(accountEmail || "");
+  const canSendTest = Boolean(previewDropQuery);
+
   const handleSendTest = (type) => {
+    if (!canSendTest) return;
     testFetcher.submit(
       {
         intent: "SEND_TEST",
@@ -582,13 +673,36 @@ export default function EmailsPage() {
         brandName,
         mainColor,
         ctaUrl: ctaUrls[type] ?? "",
-        dropName: previewDropQuery || "Sample Drop",
+        dropName: previewDropQuery,
+        to: testEmail,
       },
       { method: "post" }
     );
   };
 
+  // ---- Aperçu — rendu reel via email-templates.js (memes fonctions qu'un
+  // vrai envoi), pas une reconstitution maison qui pourrait diverger. ----
   const previewDropName = previewDropQuery || "Your Drop";
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      previewFetcher.submit(
+        {
+          intent: "RENDER_PREVIEW",
+          type: openEmailType,
+          subject: subjects[openEmailType] || "",
+          body: bodies[openEmailType] || "",
+          brandName: brandName || defaultShopName,
+          mainColor,
+          logoUrl: logoUrl || "",
+          ctaUrl: ctaUrls[openEmailType] || "",
+          dropName: previewDropName,
+        },
+        { method: "post" }
+      );
+    }, 400);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line
+  }, [openEmailType, subjects[openEmailType], bodies[openEmailType], ctaUrls[openEmailType], brandName, mainColor, logoUrl, previewDropName]);
 
   return (
     <div style={{ fontFamily: popFontFamily, minHeight: "100vh", display: "flex", flexDirection: "column" }}>
@@ -610,7 +724,7 @@ export default function EmailsPage() {
         <div style={{ padding: "20px 20px 0" }}>
           {testFetcher.data.success && (
             <div style={{ marginBottom: 12 }}>
-              <AutoDismissBanner message={`Test sent to ${accountEmail}`} dismissKey={testFetcher.data} />
+              <AutoDismissBanner message={`Test sent to ${testFetcher.data.to}`} dismissKey={testFetcher.data} />
             </div>
           )}
           {testFetcher.data.error && (
@@ -632,7 +746,7 @@ export default function EmailsPage() {
         <h1 style={pageHeaderTitleStyle}>Emails</h1>
       </div>
 
-      <CompactBrandBar
+      <BrandBar
         brandName={brandName}
         setBrandName={setBrandName}
         mainColor={mainColor}
@@ -640,130 +754,153 @@ export default function EmailsPage() {
         logoUrl={logoUrl}
         setLogoUrl={setLogoUrl}
         defaultShopName={defaultShopName}
+        drops={drops}
+        previewDropQuery={previewDropQuery}
+        onPreviewDropQueryChange={handlePreviewDropQueryChange}
       />
 
+      {/* ===== Niveau 1 — onglets horizontaux (groupes = contextes) ===== */}
+      <div style={{ display: "flex", gap: 4, padding: "14px 20px 0", borderBottom: "1px solid var(--vd-hairline, #e3e3e3)" }}>
+        {GROUPS.map((group) => {
+          const locked = isStepLocked(group.id, plan);
+          const unlocked = unlockedTypesInGroup(group, plan);
+          const inactiveCount = locked ? 0 : unlocked.filter((t) => !activeStates[t]).length;
+          const isSelected = selectedGroupId === group.id;
+          return (
+            <button
+              key={group.id}
+              type="button"
+              onClick={() => {
+                setSelectedGroupId(group.id);
+                if (!locked) setOpenEmailType(unlocked[0] ?? group.types[0]);
+              }}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "8px 14px",
+                background: "none",
+                border: "none",
+                borderBottom: isSelected ? "2px solid var(--vd-ink, #1a1a1a)" : "2px solid transparent",
+                marginBottom: -1,
+                fontSize: 13.5,
+                fontWeight: isSelected ? 700 : 500,
+                color: locked ? "var(--vd-ink-3, #8B93A0)" : isSelected ? "var(--vd-ink, #1a1a1a)" : "#6d7175",
+                cursor: "pointer",
+              }}
+            >
+              {group.label}
+              {locked && (
+                <span style={{ fontSize: 10.5, fontWeight: 600, color: "var(--vd-ink-3, #8B93A0)" }}>Pro</span>
+              )}
+              {!locked && inactiveCount > 0 && (
+                <span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--vd-sched-fg, #7A5600)" }}>
+                  ({inactiveCount} inactive)
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
       <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
-        {/* ===== SÉQUENCE (accordéon) ===== */}
+        {/* ===== Niveau 2 — accordéon vertical des e-mails du groupe ===== */}
         <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px 32px" }}>
-          {SEQUENCE_STEPS.map((step, index) => {
-            const locked = isStepLocked(step.id, plan);
-            const isOpen = openStepId === step.id;
-            const stepTypes =
-              step.id === "waitlist"
-                ? [TYPES.WAITLIST_CONFIRMATION, TYPES.WAITLIST_RANK_UPDATE]
-                : step.id === "live"
-                ? [TYPES.DROP_LIVE]
-                : [TYPES.DROP_ENDED];
-            const unlockedTypes = stepTypes.filter((t) => !isStepLocked(t === TYPES.WAITLIST_RANK_UPDATE ? "rank_update" : step.id, plan));
-            const activeCount = unlockedTypes.filter((t) => activeStates[t]).length;
+          {isStepLocked(selectedGroup.id, plan) ? (
+            <LockedGroupPanel planName="Pro" />
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {selectedGroup.types.map((type, index) => {
+                const typeLocked = isStepLocked(
+                  type === TYPES.WAITLIST_RANK_UPDATE ? "rank_update" : selectedGroup.id,
+                  plan
+                );
+                if (typeLocked) {
+                  return (
+                    <LockedCard
+                      key={type}
+                      title={CONFIG_BY_TYPE[type].title}
+                      description={CONFIG_BY_TYPE[type].description}
+                      planName="Pro"
+                    />
+                  );
+                }
 
-            return (
-              <div key={step.id} style={{ display: "flex", gap: 14 }}>
-                {/* Filet + point */}
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 16, flexShrink: 0 }}>
-                  <div
-                    style={{
-                      width: 9,
-                      height: 9,
-                      borderRadius: "50%",
-                      marginTop: 18,
-                      flexShrink: 0,
-                      background: isOpen ? "var(--vd-ink, #14181F)" : "transparent",
-                      boxShadow: isOpen ? "none" : "inset 0 0 0 1.5px var(--vd-ink-3, #8B93A0)",
-                    }}
-                  />
-                  {index < SEQUENCE_STEPS.length - 1 && (
-                    <div style={{ width: 1, flex: 1, background: "var(--vd-hairline, #E3E3E3)", marginTop: 6 }} />
-                  )}
-                </div>
+                const isOpenItem = openEmailType === type;
+                const showRail = selectedGroup.types.length > 1;
 
-                {/* Contenu de l'étape */}
-                <div style={{ flex: 1, minWidth: 0, paddingBottom: 22 }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setOpenStepId(isOpen ? null : step.id);
-                      if (!isOpen) setPreviewType(unlockedTypes[0] ?? stepTypes[0]);
-                    }}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      width: "100%",
-                      background: "none",
-                      border: "none",
-                      padding: "6px 0",
-                      cursor: "pointer",
-                      textAlign: "left",
-                    }}
-                  >
-                    <div>
-                      <div style={{ fontSize: 14.5, fontWeight: 700, color: "#1a1a1a" }}>{step.label}</div>
-                      <div style={{ fontSize: 12.5, color: "#6d7175", marginTop: 2 }}>{step.condition}</div>
-                    </div>
-                    {!locked && (
-                      <ActivePill
-                        active={activeCount > 0}
-                        countLabel={
-                          unlockedTypes.length > 1
-                            ? `${step.label} · ${activeCount}/${unlockedTypes.length} active`
-                            : undefined
-                        }
-                      />
+                return (
+                  <div key={type} style={{ display: "flex", gap: 12 }}>
+                    {showRail && (
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 14, flexShrink: 0 }}>
+                        <div
+                          style={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: "50%",
+                            marginTop: 14,
+                            flexShrink: 0,
+                            background: isOpenItem ? "var(--vd-ink, #14181F)" : "transparent",
+                            boxShadow: isOpenItem ? "none" : "inset 0 0 0 1.5px var(--vd-ink-3, #8B93A0)",
+                          }}
+                        />
+                        {index < selectedGroup.types.length - 1 && (
+                          <div style={{ width: 1, flex: 1, background: "var(--vd-hairline, #E3E3E3)", marginTop: 6 }} />
+                        )}
+                      </div>
                     )}
-                  </button>
 
-                  {isOpen && (
-                    <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 14 }}>
-                      {locked ? (
-                        <LockedStepPanel planName="Pro" />
-                      ) : (
-                        stepTypes.map((type) => {
-                          const typeLocked = isStepLocked(
-                            type === TYPES.WAITLIST_RANK_UPDATE ? "rank_update" : step.id,
-                            plan
-                          );
-                          if (typeLocked) {
-                            return (
-                              <LockedCard
-                                key={type}
-                                title={CONFIG_BY_TYPE[type].title}
-                                description={CONFIG_BY_TYPE[type].description}
-                                planName="Pro"
-                              />
-                            );
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      {isOpenItem ? (
+                        <AutomationEditor
+                          type={type}
+                          config={CONFIG_BY_TYPE[type]}
+                          subject={subjects[type]}
+                          body={bodies[type]}
+                          ctaUrl={ctaUrls[type]}
+                          active={activeStates[type]}
+                          justActivated={justActivated === type}
+                          onSubjectChange={handleSubjectChange}
+                          onBodyChange={handleBodyChange}
+                          onCtaUrlChange={handleCtaUrlChange}
+                          onToggleActive={() => handleToggleActive(type)}
+                          onSendTest={() => handleSendTest(type)}
+                          isSendingTest={
+                            testFetcher.state !== "idle" &&
+                            testFetcher.formData?.get("type") === type
                           }
-                          return (
-                            <AutomationEditor
-                              key={type}
-                              type={type}
-                              automation={automationsByType[type]}
-                              config={CONFIG_BY_TYPE[type]}
-                              subject={subjects[type]}
-                              body={bodies[type]}
-                              ctaUrl={ctaUrls[type]}
-                              active={activeStates[type]}
-                              justActivated={justActivated === type}
-                              onSubjectChange={handleSubjectChange}
-                              onBodyChange={handleBodyChange}
-                              onCtaUrlChange={handleCtaUrlChange}
-                              onToggleActive={() => handleToggleActive(type)}
-                              onFocusField={() => setPreviewType(type)}
-                              onSendTest={() => handleSendTest(type)}
-                              isSendingTest={
-                                testFetcher.state !== "idle" &&
-                                testFetcher.formData?.get("type") === type
-                              }
-                            />
-                          );
-                        })
+                          canSendTest={canSendTest}
+                          testEmail={testEmail}
+                          onTestEmailChange={setTestEmail}
+                        />
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setOpenEmailType(type)}
+                          style={{
+                            ...cardPadded,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            width: "100%",
+                            cursor: "pointer",
+                            textAlign: "left",
+                            font: "inherit",
+                          }}
+                        >
+                          <div>
+                            <div style={{ fontSize: 14, fontWeight: 700, color: "#1a1a1a" }}>{CONFIG_BY_TYPE[type].title}</div>
+                            <p style={{ fontSize: 12.5, color: "#6d7175", margin: "4px 0 0 0" }}>{CONFIG_BY_TYPE[type].description}</p>
+                          </div>
+                          <ActivePill active={activeStates[type]} />
+                        </button>
                       )}
                     </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* ===== APERÇU (sticky) ===== */}
@@ -777,18 +914,11 @@ export default function EmailsPage() {
           }}
         >
           <PreviewPanel
-            config={CONFIG_BY_TYPE[previewType]}
-            subject={resolvePreviewText(subjects[previewType], { dropName: previewDropName, brandName, defaultShopName, ctaUrl: ctaUrls[previewType] })}
-            body={resolvePreviewText(bodies[previewType], { dropName: previewDropName, brandName, defaultShopName, ctaUrl: ctaUrls[previewType] })}
-            brandName={brandName || defaultShopName}
-            mainColor={mainColor}
-            logoUrl={logoUrl}
-            ctaLabel={CONFIG_BY_TYPE[previewType].ctaLabel ? "Access drop" : null}
+            subject={previewFetcher.data?.type === openEmailType ? previewFetcher.data.subject : subjects[openEmailType]}
+            html={previewFetcher.data?.type === openEmailType ? previewFetcher.data.html : ""}
+            isLoading={previewFetcher.state !== "idle"}
             previewMode={previewMode}
             setPreviewMode={setPreviewMode}
-            drops={drops}
-            previewDropQuery={previewDropQuery}
-            onPreviewDropQueryChange={handlePreviewDropQueryChange}
           />
         </div>
       </div>
@@ -805,172 +935,147 @@ export default function EmailsPage() {
 }
 
 /**
- * Barre de marque compacte (8.7) — une ligne au repos, se déplie pour éditer.
+ * Barre de marque — logo, nom, couleur, drop d'aperçu, toujours visibles et
+ * editables directement (pas de pastille d'etat : ce n'est pas une
+ * automatisation, section 8.11).
  */
-function CompactBrandBar({ brandName, setBrandName, mainColor, setMainColor, logoUrl, setLogoUrl, defaultShopName }) {
-  const [expanded, setExpanded] = useState(false);
-
+function BrandBar({
+  brandName,
+  setBrandName,
+  mainColor,
+  setMainColor,
+  logoUrl,
+  setLogoUrl,
+  defaultShopName,
+  drops,
+  previewDropQuery,
+  onPreviewDropQueryChange,
+}) {
   return (
-    <div style={{ padding: "12px 20px 0" }}>
+    <div style={{ padding: "16px 20px 0" }}>
       <div
         style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          padding: "10px 14px",
-          height: 56,
-          boxSizing: "border-box",
-          borderRadius: "var(--vd-radius-sm, 8px)",
+          padding: "16px",
+          borderRadius: "var(--vd-radius, 10px)",
           background: "var(--vd-subtle, #F5F6F7)",
+          display: "flex",
+          gap: "32px",
+          alignItems: "center",
+          flexWrap: "wrap",
         }}
       >
-        <div
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: 8,
-            overflow: "hidden",
-            flexShrink: 0,
-            background: "#ffffff",
-            border: "1px solid var(--vd-hairline, #e3e3e3)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          {logoUrl ? (
-            <img src={logoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-          ) : (
-            <span style={{ fontSize: 10, color: "#919191" }}>Logo</span>
-          )}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 6 }}>
+          <label
+            style={{
+              display: "inline-flex",
+              width: "80px",
+              height: "80px",
+              borderRadius: "12px",
+              border: "1px dashed #C9CCCF",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "12px",
+              color: "#6D7175",
+              cursor: "pointer",
+              background: "#FFFFFF",
+              flexShrink: 0,
+              overflow: "hidden",
+            }}
+          >
+            {logoUrl ? (
+              <img src={logoUrl} alt="Logo preview" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            ) : (
+              "Upload"
+            )}
+            <input
+              type="file"
+              accept="image/png,image/svg+xml,image/jpeg"
+              style={{ display: "none" }}
+              onChange={(e) => {
+                const file = e.target.files && e.target.files[0];
+                if (!file) {
+                  setLogoUrl("");
+                  return;
+                }
+                const reader = new FileReader();
+                reader.onload = () => setLogoUrl(reader.result);
+                reader.readAsDataURL(file);
+              }}
+            />
+          </label>
+          <span style={{ fontSize: 11, color: "#919191", maxWidth: 90 }}>PNG or SVG, 512px min</span>
         </div>
-        <div style={{ fontSize: 13.5, fontWeight: 700, color: "#1a1a1a", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {brandName || defaultShopName}
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ width: 14, height: 14, borderRadius: 4, background: mainColor, flexShrink: 0, border: "1px solid rgba(0,0,0,0.08)" }} />
-          <span style={{ fontSize: 11.5, color: "#6d7175", ...monoNumberStyle }}>{mainColor}</span>
-        </div>
-        <span style={{ fontSize: 11.5, color: "#919191" }}>Applied to all 3 emails</span>
-        <button type="button" onClick={() => setExpanded((v) => !v)} style={secondaryButtonStyle}>
-          {expanded ? "Done" : "Edit brand"}
-        </button>
-      </div>
 
-      {expanded && (
-        <div
-          style={{
-            padding: "16px",
-            borderRadius: "0 0 var(--vd-radius-sm, 8px) var(--vd-radius-sm, 8px)",
-            background: "var(--vd-subtle, #F5F6F7)",
-            marginTop: -1,
-          }}
-        >
-          <div style={{ display: "flex", gap: "32px", alignItems: "flex-start", flexWrap: "wrap" }}>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 6 }}>
-              <label
-                style={{
-                  display: "inline-flex",
-                  width: "80px",
-                  height: "80px",
-                  borderRadius: "12px",
-                  border: "1px dashed #C9CCCF",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: "12px",
-                  color: "#6D7175",
-                  cursor: "pointer",
-                  background: "#FFFFFF",
-                  flexShrink: 0,
-                  overflow: "hidden",
-                }}
-              >
-                {logoUrl ? (
-                  <img src={logoUrl} alt="Logo preview" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                ) : (
-                  "Upload"
-                )}
-                <input
-                  type="file"
-                  accept="image/png,image/svg+xml,image/jpeg"
-                  style={{ display: "none" }}
-                  onChange={(e) => {
-                    const file = e.target.files && e.target.files[0];
-                    if (!file) {
-                      setLogoUrl("");
-                      return;
-                    }
-                    const reader = new FileReader();
-                    reader.onload = () => setLogoUrl(reader.result);
-                    reader.readAsDataURL(file);
-                  }}
-                />
-              </label>
-              <span style={{ fontSize: 11, color: "#919191", maxWidth: 90 }}>PNG or SVG, 512px min</span>
-            </div>
+        <div style={{ flex: 1, minWidth: 160 }}>
+          <span style={{ marginBottom: 6, display: "block", fontSize: 13, color: "#6d7175" }}>Brand name</span>
+          <input
+            type="text"
+            value={brandName}
+            onChange={(e) => setBrandName(e.target.value)}
+            placeholder={defaultShopName}
+            style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}
+          />
+        </div>
 
-            <div style={{ flex: 1, minWidth: 180 }}>
-              <span style={{ marginBottom: 6, display: "block", fontSize: 13, color: "#6d7175" }}>Brand name</span>
+        <div style={{ flex: 1, minWidth: 160, maxWidth: "260px" }}>
+          <span style={{ marginBottom: 6, display: "block", fontSize: 13, color: "#6d7175" }}>Main color</span>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <style>{`
+              .vaultd-color-input::-webkit-color-swatch-wrapper { padding: 0; }
+              .vaultd-color-input::-webkit-color-swatch { border: none; border-radius: 7px; }
+              .vaultd-color-input::-moz-color-swatch { border: none; border-radius: 7px; }
+            `}</style>
+            <div style={{ width: "32px", height: "32px", borderRadius: "8px", border: "1px solid #C9CCCF", overflow: "hidden", padding: 0, flexShrink: 0 }}>
               <input
-                type="text"
-                value={brandName}
-                onChange={(e) => setBrandName(e.target.value)}
-                placeholder={defaultShopName}
-                style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}
+                type="color"
+                className="vaultd-color-input"
+                value={mainColor}
+                onChange={(e) => setMainColor(e.target.value)}
+                style={{ width: "100%", height: "100%", border: "none", padding: 0, margin: 0, cursor: "pointer", appearance: "none", WebkitAppearance: "none", background: "transparent" }}
               />
             </div>
-
-            <div style={{ flex: 1, minWidth: 180, maxWidth: "260px" }}>
-              <span style={{ marginBottom: 6, display: "block", fontSize: 13, color: "#6d7175" }}>Main color</span>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <style>{`
-                  .vaultd-color-input::-webkit-color-swatch-wrapper { padding: 0; }
-                  .vaultd-color-input::-webkit-color-swatch { border: none; border-radius: 7px; }
-                  .vaultd-color-input::-moz-color-swatch { border: none; border-radius: 7px; }
-                `}</style>
-                <div style={{ width: "32px", height: "32px", borderRadius: "8px", border: "1px solid #C9CCCF", overflow: "hidden", padding: 0, flexShrink: 0 }}>
-                  <input
-                    type="color"
-                    className="vaultd-color-input"
-                    value={mainColor}
-                    onChange={(e) => setMainColor(e.target.value)}
-                    style={{ width: "100%", height: "100%", border: "none", padding: 0, margin: 0, cursor: "pointer", appearance: "none", WebkitAppearance: "none", background: "transparent" }}
-                  />
-                </div>
-                <input
-                  type="text"
-                  value={mainColor}
-                  onChange={(e) => setMainColor(e.target.value)}
-                  placeholder="#000000"
-                  style={{ ...inputStyle, width: "100%" }}
-                />
-              </div>
-            </div>
+            <input
+              type="text"
+              value={mainColor}
+              onChange={(e) => setMainColor(e.target.value)}
+              placeholder="#000000"
+              style={{ ...inputStyle, width: "100%" }}
+            />
           </div>
         </div>
-      )}
+
+        <div style={{ flex: 1, minWidth: 160, maxWidth: "260px" }}>
+          <span style={{ marginBottom: 6, display: "block", fontSize: 13, color: "#6d7175" }}>
+            Preview drop
+          </span>
+          <input
+            type="text"
+            list="vaultd-drops-datalist"
+            value={previewDropQuery}
+            onChange={(e) => onPreviewDropQueryChange(e.target.value)}
+            placeholder="Search a drop or paste an ID"
+            style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}
+          />
+          <datalist id="vaultd-drops-datalist">
+            {drops.map((d) => (
+              <option key={d.externalId} value={d.name} />
+            ))}
+          </datalist>
+        </div>
+      </div>
     </div>
   );
 }
 
 /**
- * Panneau d'aperçu permanent (8.5) — le manque principal de l'ancien écran.
+ * Panneau d'aperçu permanent — rendu HTML reel (email-templates.js), pas une
+ * reconstitution maison : ne peut donc pas diverger de ce qui part vraiment.
  */
-function PreviewPanel({
-  config,
-  subject,
-  body,
-  brandName,
-  mainColor,
-  logoUrl,
-  ctaLabel,
-  previewMode,
-  setPreviewMode,
-  drops,
-  previewDropQuery,
-  onPreviewDropQueryChange,
-}) {
-  const frameWidth = previewMode === "mobile" ? 260 : 320;
+function PreviewPanel({ subject, html, isLoading, previewMode, setPreviewMode }) {
+  const PANEL_W = 300;
+  const frameW = previewMode === "mobile" ? 375 : 640;
+  const frameH = 900;
+  const scale = PANEL_W / frameW;
 
   return (
     <div style={{ position: "sticky", top: 0 }}>
@@ -1012,86 +1117,40 @@ function PreviewPanel({
         </div>
       </div>
 
-      <div
-        style={{
-          background: "#f0f0f0",
-          borderRadius: 12,
-          padding: 16,
-          display: "flex",
-          justifyContent: "center",
-        }}
-      >
-        <div
-          style={{
-            width: frameWidth,
-            maxWidth: "100%",
-            background: "#ffffff",
-            borderRadius: 8,
-            boxShadow: "var(--vd-ring, 0 0 0 1px rgba(20,24,31,.07))",
-            overflow: "hidden",
-          }}
-        >
-          <div style={{ padding: "18px 16px 14px", textAlign: "center", borderBottom: "1px solid var(--vd-hairline, #f0f0f0)" }}>
-            {logoUrl ? (
-              <img src={logoUrl} alt="" style={{ width: 36, height: 36, borderRadius: 8, objectFit: "cover", margin: "0 auto 8px" }} />
-            ) : (
-              <div style={{ width: 36, height: 36, borderRadius: 8, background: "#f2f2f2", margin: "0 auto 8px" }} />
-            )}
-            <div style={{ fontSize: 12, fontWeight: 700, color: "#1a1a1a" }}>{brandName}</div>
-          </div>
-          <div style={{ padding: "16px" }}>
-            <div style={{ fontSize: 10.5, color: "#919191", marginBottom: 4 }}>Subject</div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#1a1a1a", marginBottom: 14 }}>
-              {subject || "(empty subject)"}
-            </div>
-            <div style={{ fontSize: 12.5, color: "#303030", whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
-              {body || "(empty message)"}
-            </div>
-            {ctaLabel && (
-              <div style={{ marginTop: 16, textAlign: "center" }}>
-                <span
-                  style={{
-                    display: "inline-block",
-                    background: mainColor,
-                    color: "#ffffff",
-                    fontSize: 12.5,
-                    fontWeight: 600,
-                    padding: "8px 18px",
-                    borderRadius: 7,
-                  }}
-                >
-                  {ctaLabel}
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
+      <div style={{ fontSize: 10.5, color: "#919191", marginBottom: 3 }}>Subject</div>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "#1a1a1a", marginBottom: 12, opacity: isLoading ? 0.5 : 1 }}>
+        {subject || "(empty subject)"}
       </div>
 
-      <div style={{ marginTop: 12 }}>
-        <span style={{ fontSize: 11.5, color: "#6d7175", display: "block", marginBottom: 4 }}>
-          Preview drop — sample data source
-        </span>
-        <input
-          type="text"
-          list="vaultd-preview-drops-datalist"
-          value={previewDropQuery}
-          onChange={(e) => onPreviewDropQueryChange(e.target.value)}
-          placeholder="Search a drop or paste an ID"
-          style={{ ...inputStyle, fontSize: 12.5 }}
-        />
-        <datalist id="vaultd-preview-drops-datalist">
-          {drops.map((d) => (
-            <option key={d.externalId} value={d.name} />
-          ))}
-        </datalist>
+      <div
+        style={{
+          width: PANEL_W,
+          height: frameH * scale,
+          overflow: "hidden",
+          borderRadius: 8,
+          boxShadow: "var(--vd-ring, 0 0 0 1px rgba(20,24,31,.07))",
+          background: "#ffffff",
+          opacity: isLoading ? 0.6 : 1,
+          transition: "opacity .1s ease",
+        }}
+      >
+        {html && (
+          <iframe
+            srcDoc={html}
+            title="Email preview"
+            sandbox=""
+            style={{ width: frameW, height: frameH, border: "none", transform: `scale(${scale})`, transformOrigin: "top left" }}
+          />
+        )}
       </div>
     </div>
   );
 }
 
 /**
- * Carte d'édition d'une automation (8.1, 8.2, 8.3, 8.4, 8.9).
+ * Carte d'édition d'une automation (8.3, 8.4, 8.9, 8.15). N'apparait qu'une
+ * fois ouverte — la pastille d'etat n'existe donc qu'ici quand elle est
+ * ouverte, jamais en double avec la ligne repliee (8.10).
  */
 function AutomationEditor({
   type,
@@ -1105,9 +1164,11 @@ function AutomationEditor({
   onBodyChange,
   onCtaUrlChange,
   onToggleActive,
-  onFocusField,
   onSendTest,
   isSendingTest,
+  canSendTest,
+  testEmail,
+  onTestEmailChange,
 }) {
   const activeFieldRef = useRef(null); // ref vers le <input>/<textarea> actuellement focus
 
@@ -1146,22 +1207,19 @@ function AutomationEditor({
             {config.description}
           </p>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-          <span style={{ fontSize: 12, color: "#6d7175" }}>Automatic sending</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+          <ActivePill active={active} />
           <button
             type="button"
             role="switch"
             aria-checked={active}
+            aria-label="Automatic sending"
             onClick={onToggleActive}
             style={toggleSwitchStyle(active)}
           >
             <span style={toggleSwitchKnobStyle(active)} />
           </button>
         </div>
-      </div>
-
-      <div style={{ marginTop: 8 }}>
-        <ActivePill active={active} />
       </div>
 
       {justActivated && (
@@ -1181,10 +1239,7 @@ function AutomationEditor({
           <input
             type="text"
             name="subject"
-            onFocus={(e) => {
-              activeFieldRef.current = e.target;
-              onFocusField();
-            }}
+            onFocus={(e) => { activeFieldRef.current = e.target; }}
             value={subject}
             onChange={(e) => onSubjectChange(type, e.target.value)}
             style={{ ...inputStyle, marginTop: 8 }}
@@ -1196,10 +1251,7 @@ function AutomationEditor({
           <textarea
             name="body"
             rows={8}
-            onFocus={(e) => {
-              activeFieldRef.current = e.target;
-              onFocusField();
-            }}
+            onFocus={(e) => { activeFieldRef.current = e.target; }}
             value={body}
             onChange={(e) => onBodyChange(type, e.target.value)}
             style={{ ...textareaStyle, fontFamily: "var(--vd-sans, inherit)", marginTop: 8 }}
@@ -1236,10 +1288,7 @@ function AutomationEditor({
             <input
               type="url"
               name="ctaUrl"
-              onFocus={(e) => {
-                activeFieldRef.current = e.target;
-                onFocusField();
-              }}
+              onFocus={(e) => { activeFieldRef.current = e.target; }}
               value={ctaUrl}
               onChange={(e) => onCtaUrlChange(type, e.target.value)}
               placeholder="https://your-store.myshopify.com/products/..."
@@ -1248,15 +1297,33 @@ function AutomationEditor({
           </div>
         )}
 
-        <div style={{ display: "flex", gap: 8, marginTop: 20, justifyContent: "flex-end" }}>
-          <button
-            type="button"
-            disabled={isSendingTest}
-            onClick={onSendTest}
-            style={isSendingTest ? { ...secondaryButtonStyle, opacity: 0.6, cursor: "default" } : secondaryButtonStyle}
-          >
-            {isSendingTest ? "Sending…" : "Send a test"}
-          </button>
+        <div style={{ marginTop: 20, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <input
+              type="email"
+              value={testEmail}
+              onChange={(e) => onTestEmailChange(e.target.value)}
+              placeholder="you@example.com"
+              style={{ ...inputStyle, width: 220, fontSize: 12.5, padding: "7px 10px" }}
+            />
+            <button
+              type="button"
+              disabled={isSendingTest || !canSendTest}
+              onClick={onSendTest}
+              style={
+                isSendingTest || !canSendTest
+                  ? { ...secondaryButtonStyle, opacity: 0.5, cursor: "default" }
+                  : secondaryButtonStyle
+              }
+            >
+              {isSendingTest ? "Sending…" : "Send a test"}
+            </button>
+          </div>
+          {!canSendTest && (
+            <span style={{ fontSize: 11.5, color: "#919191" }}>
+              Choose a preview drop above to send a test.
+            </span>
+          )}
         </div>
       </div>
     </div>
