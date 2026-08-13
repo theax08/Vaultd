@@ -13,7 +13,7 @@ import {
 } from "../support.server";
 import { SUPPORT_CATEGORIES } from "../support-faq";
 import {
-  pagePopStyle,
+  popFontFamily,
   pageHeaderTitleStyle,
   GridIcon,
   card,
@@ -232,12 +232,14 @@ export default function SupportPage() {
   const activeCategory = SUPPORT_CATEGORIES.find((c) => c.key === menuCategory) || null;
 
   return (
-    <div style={{ ...pagePopStyle, display: "flex", flexDirection: "column", minHeight: "calc(100vh - 64px)" }}>
-      <Link to={backTo} style={backLinkStyle}>
-        ← Back
-      </Link>
+    <div style={{ fontFamily: popFontFamily, display: "flex", flexDirection: "column", minHeight: "100vh" }}>
+      <div style={{ padding: "20px 20px 0" }}>
+        <Link to={backTo} style={backLinkStyle}>
+          ← Back
+        </Link>
+      </div>
 
-      <div style={{ ...card, display: "flex", alignItems: "stretch", flex: 1, minHeight: 0, padding: 0, overflow: "hidden" }}>
+      <div style={{ ...card, display: "flex", alignItems: "stretch", flex: 1, minHeight: 0, padding: 0, overflow: "hidden", borderRadius: 0 }}>
         {/* Sidebar */}
         <div style={{ width: 260, display: "flex", flexDirection: "column", padding: 14, minHeight: 0, borderRight: "1px solid #e3e3e3" }}>
           <input
