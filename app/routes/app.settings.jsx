@@ -332,7 +332,7 @@ export default function SettingsPage() {
         </div>
       )}
 
-      <div style={{ ...card, display: "flex", alignItems: "stretch", padding: 0, overflow: "hidden" }}>
+      <div style={{ ...card, display: "flex", alignItems: "stretch", padding: 0, overflow: "hidden", minHeight: "100vh" }}>
         {/* Sidebar */}
         <div style={{ width: 200, display: "flex", flexDirection: "column", padding: 14, gap: 4, borderRight: "1px solid #e3e3e3" }}>
           {SECTIONS.map((s) => (
