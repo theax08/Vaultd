@@ -102,8 +102,13 @@ export async function deleteAccount(accountId) {
 }
 
 // Creates a new VaultdAccount and links it to the given shopDomain.
-// If an account with the same email already exists, the shop is linked to it instead.
-export async function createAccountForShop(shopDomain, { email, password, username } = {}) {
+// Does NOT auto-link to an existing account on email match — that would let
+// anyone get a free ride on someone else's plan just by typing their email
+// here, skipping the password check, the Elite-plan requirement, and the
+// per-store add-on billing that the "log in to link" flow below enforces
+// (see verifyAccountCredentials + createLinkTicket). A collision is reported
+// as an error so the merchant is pointed at that paid flow instead.
+export async function createAccountForShop(shopDomain, { email, password } = {}) {
   let passwordHash;
   if (password) {
     const passwordError = validatePassword(password);
@@ -118,12 +123,10 @@ export async function createAccountForShop(shopDomain, { email, password, userna
       where: { email: { equals: email, mode: "insensitive" } },
     });
     if (existing) {
-      await db.shopSettings.upsert({
-        where: { shopDomain },
-        create: { shopDomain, vaultdAccountId: existing.id },
-        update: { vaultdAccountId: existing.id },
-      });
-      return { account: await getAccountForShop(shopDomain) };
+      return {
+        error:
+          "An account with this email already exists. Use \"Already have a Vaultd account?\" below to link this store to it instead.",
+      };
     }
   }
 
