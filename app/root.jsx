@@ -1,4 +1,5 @@
 import { Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router";
+import { VD_TOKENS_CSS } from "./styles/vd-tokens";
 
 export default function App() {
   return (
@@ -14,6 +15,7 @@ export default function App() {
         <Meta />
         <Links />
         <style>{`body { margin: 0; padding: 0; }`}</style>
+        <style dangerouslySetInnerHTML={{ __html: VD_TOKENS_CSS }} />
       </head>
       <body suppressHydrationWarning>
         <Outlet />

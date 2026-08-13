@@ -101,8 +101,9 @@ export function GridIcon() {
 
 export const card = {
   background: "#ffffff",
-  border: "1px solid #e3e3e3",
+  border: 0,
   borderRadius: 10,
+  boxShadow: "var(--vd-ring)",
 };
 
 export const cardPadded = {
