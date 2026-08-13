@@ -11,7 +11,7 @@ import {
 } from "../vaultd-account.server";
 import { canUseColor, PLAN_SUMMARIES, COLOR_OPTIONS, PLAN_ORDER } from "../vaultd-plans";
 import {
-  pagePopStyle,
+  popFontFamily,
   pageHeaderRowStyle,
   pageHeaderTitleRowStyle,
   pageHeaderTitleStyle,
@@ -289,50 +289,59 @@ export default function SettingsPage() {
   const isElite = plan === "ELITE";
 
   return (
-    <div style={pagePopStyle}>
+    <div style={{ fontFamily: popFontFamily }}>
 
-      {isOnboarding && (
-        <div style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 10, padding: "14px 18px", marginBottom: 16 }}>
-          <p style={{ fontSize: 13.5, fontWeight: 700, color: "#0369a1", margin: "0 0 4px 0" }}>
-            Welcome to Vaultd!
-          </p>
-          <p style={{ fontSize: 13, color: "#0c4a6e", margin: 0 }}>
-            Create your Vaultd account below to get started. If you already use Vaultd on another store, log in with your existing account ID and password to link this store.
-          </p>
+      {(isOnboarding ||
+        linkStatus === "confirmed" ||
+        linkStatus === "error" ||
+        actionData?.error ||
+        isRedirectingToLinkBilling ||
+        (actionData?.success && actionData.intent !== "request_password_reset" && !isRedirectingToLinkBilling)) && (
+        <div style={{ padding: "20px 20px 0" }}>
+          {isOnboarding && (
+            <div style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 10, padding: "14px 18px", marginBottom: 16 }}>
+              <p style={{ fontSize: 13.5, fontWeight: 700, color: "#0369a1", margin: "0 0 4px 0" }}>
+                Welcome to Vaultd!
+              </p>
+              <p style={{ fontSize: 13, color: "#0c4a6e", margin: 0 }}>
+                Create your Vaultd account below to get started. If you already use Vaultd on another store, log in with your existing account ID and password to link this store.
+              </p>
+            </div>
+          )}
+
+          {linkStatus === "confirmed" && (
+            <div style={{ marginBottom: 16 }}>
+              <AutoDismissBanner message="Store linked to the other account." dismissKey={linkStatus} />
+            </div>
+          )}
+          {linkStatus === "error" && (
+            <div style={{ marginBottom: 16 }}>
+              <AutoDismissBanner tone="error" message="Linking failed — the billing charge may have been declined. Please try again." dismissKey={linkStatus} />
+            </div>
+          )}
+
+          {actionData?.error && (
+            <div style={{ marginBottom: 16 }}>
+              <AutoDismissBanner tone="error" message={actionData.error} dismissKey={actionData} />
+            </div>
+          )}
+          {isRedirectingToLinkBilling && (
+            <div style={{ marginBottom: 16 }}>
+              <AutoDismissBanner message="Credentials verified — redirecting to billing for the $50/month store add-on…" dismissKey={actionData} />
+            </div>
+          )}
+          {actionData?.success && actionData.intent !== "request_password_reset" && !isRedirectingToLinkBilling && (
+            <div style={{ marginBottom: 16 }}>
+              <AutoDismissBanner
+                message={actionData.intent === "reset_password" ? "Password reset. You can log in with your new password." : "Saved."}
+                dismissKey={actionData}
+              />
+            </div>
+          )}
         </div>
       )}
 
-      {linkStatus === "confirmed" && (
-        <div style={{ marginBottom: 16 }}>
-          <AutoDismissBanner message="Store linked to the other account." dismissKey={linkStatus} />
-        </div>
-      )}
-      {linkStatus === "error" && (
-        <div style={{ marginBottom: 16 }}>
-          <AutoDismissBanner tone="error" message="Linking failed — the billing charge may have been declined. Please try again." dismissKey={linkStatus} />
-        </div>
-      )}
-
-      {actionData?.error && (
-        <div style={{ marginBottom: 16 }}>
-          <AutoDismissBanner tone="error" message={actionData.error} dismissKey={actionData} />
-        </div>
-      )}
-      {isRedirectingToLinkBilling && (
-        <div style={{ marginBottom: 16 }}>
-          <AutoDismissBanner message="Credentials verified — redirecting to billing for the $50/month store add-on…" dismissKey={actionData} />
-        </div>
-      )}
-      {actionData?.success && actionData.intent !== "request_password_reset" && !isRedirectingToLinkBilling && (
-        <div style={{ marginBottom: 16 }}>
-          <AutoDismissBanner
-            message={actionData.intent === "reset_password" ? "Password reset. You can log in with your new password." : "Saved."}
-            dismissKey={actionData}
-          />
-        </div>
-      )}
-
-      <div style={{ ...card, display: "flex", alignItems: "stretch", padding: 0, overflow: "hidden", minHeight: "100vh" }}>
+      <div style={{ ...card, display: "flex", alignItems: "stretch", padding: 0, overflow: "hidden", minHeight: "100vh", borderRadius: 0 }}>
         {/* Sidebar */}
         <div style={{ width: 200, display: "flex", flexDirection: "column", padding: 14, gap: 4, borderRight: "1px solid #e3e3e3" }}>
           {SECTIONS.map((s) => (
