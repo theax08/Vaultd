@@ -1013,7 +1013,7 @@ export default function LiveDashboardPage() {
                 Traffic sources
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                {isLive && (
+                {isLive ? (
                   <span
                     style={{
                       display: "inline-flex",
@@ -1026,16 +1026,18 @@ export default function LiveDashboardPage() {
                       border: "1px solid rgba(22,163,74,0.35)",
                       borderRadius: 20,
                       padding: "2px 8px",
+                      ...monoNumberStyle,
                     }}
                     title="Visitors currently on the site (last 45s)"
                   >
                     <span style={{ width: 6, height: 6, borderRadius: "50%", backgroundColor: "#4ade80" }} />
                     {drop.live.onSiteNow} on site now
                   </span>
+                ) : (
+                  <div style={{ fontSize: 11, color: "#6b7280", ...monoNumberStyle }}>
+                    {drop.live.visitors} visitors
+                  </div>
                 )}
-                <div style={{ fontSize: 11, color: "#6b7280" }}>
-                  {drop.live.visitors} visitors
-                </div>
               </div>
             </div>
 
