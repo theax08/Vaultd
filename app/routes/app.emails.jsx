@@ -908,9 +908,9 @@ export default function EmailsPage() {
           style={{
             width: 340,
             flexShrink: 0,
+            alignSelf: "flex-start",
             borderLeft: "1px solid var(--vd-hairline, #e3e3e3)",
             padding: 16,
-            overflowY: "auto",
           }}
         >
           <PreviewPanel
