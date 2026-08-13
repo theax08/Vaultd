@@ -35,7 +35,7 @@ async function notifyWaitlist(drop, type) {
   const automation = await db.emailAutomation.findFirst({
     where: { shopDomain: drop.shopDomain, type },
   });
-  if (!automation) return;
+  if (!automation || !automation.active) return;
 
   const entries = await db.waitlistEntry.findMany({
     where: { dropId: drop.id, unsubscribedAt: null },

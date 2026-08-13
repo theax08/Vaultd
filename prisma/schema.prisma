@@ -201,6 +201,7 @@ model EmailAutomation {
   dropId         String?
   dropExternalId String?
   type           String
+  active         Boolean  @default(true)
   brandName      String
   mainColor      String
   subject        String

@@ -51,6 +51,7 @@ export const loader = async ({ request }) => {
   let activeWaitlistMembers = 0;
   let launchedDropCount = 0;
   let recentDrops = [];
+  let activeEmailCount = 0;
 
   try {
     [
@@ -61,6 +62,7 @@ export const loader = async ({ request }) => {
       activeWaitlistMembers,
       launchedDropCount,
       recentDrops,
+      activeEmailCount,
     ] = await Promise.all([
       db.drop.findMany({
         where: { shopDomain, status: "ENDED" },
@@ -84,8 +86,17 @@ export const loader = async ({ request }) => {
         take: 30,
         select: { id: true, name: true, status: true, createdAt: true, autoLaunch: true, startTime: true },
       }),
+      db.emailAutomation.count({ where: { shopDomain, active: true } }),
     ]);
   } catch {}
+
+  // Un drop programme (auto-launch, date future) dont aucun email n'est
+  // actif partirait en silence — le marchand croit son tunnel branche.
+  const hasScheduledDropWithNoActiveEmails =
+    activeEmailCount === 0 &&
+    recentDrops.some(
+      (d) => d.status === "DRAFT" && d.autoLaunch && d.startTime && new Date(d.startTime) > new Date()
+    );
 
   const totalRevenue = endedDrops.reduce((sum, d) => sum + Number(d.finalRevenue ?? 0), 0);
   const convRates = endedDrops
@@ -118,6 +129,7 @@ export const loader = async ({ request }) => {
     plan,
     features: PLAN_FEATURES[plan] ?? [],
     hasNewFeatures: account ? account.lastSeenPlan !== account.plan : false,
+    hasScheduledDropWithNoActiveEmails,
   };
 };
 
@@ -130,7 +142,7 @@ const NAV_LINKS = [
 ];
 
 export default function Dashboard() {
-  const { stats, steps, recentDrops, plan, features, hasNewFeatures } = useLoaderData();
+  const { stats, steps, recentDrops, plan, features, hasNewFeatures, hasScheduledDropWithNoActiveEmails } = useLoaderData();
 
   const completedSteps = steps.filter((s) => s.done).length;
   const nextStep = steps.find((s) => !s.done);
@@ -140,6 +152,33 @@ export default function Dashboard() {
 
   return (
     <div style={pagePopStyle}>
+
+      {features.includes("automated_emails") && hasScheduledDropWithNoActiveEmails && (
+        <div
+          style={{
+            ...cardPadded,
+            marginBottom: 16,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            background: "var(--vd-sched-bg, #FFF4DC)",
+            border: "none",
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--vd-sched-fg, #7A5600)" }}>
+              A drop is scheduled, but no emails are active
+            </div>
+            <p style={{ fontSize: 12.5, color: "var(--vd-sched-fg, #7A5600)", margin: "2px 0 0 0" }}>
+              Customers who join the waitlist won't hear from you unless you turn at least one automation on.
+            </p>
+          </div>
+          <Link to="/app/emails" style={{ ...primaryButtonStyle, textDecoration: "none", flexShrink: 0 }}>
+            Review emails →
+          </Link>
+        </div>
+      )}
 
       {/* KPI cards — hidden until a drop has actually completed: an
           all-zero row at install reads as "broken", not "new" (VAULTD-DESIGN.md §5) */}

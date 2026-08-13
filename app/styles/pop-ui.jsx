@@ -378,6 +378,10 @@ export const GLOBAL_POP_CSS = `
   .vd-drop--scheduled::before { background: var(--vd-sched); }
   .vd-drop--live::before      { background: var(--vd-live); }
   .vd-drop--ended::before     { background: var(--vd-ended); }
+
+  /* Emails screen — clickable {{tag}} chips (VAULTD-DESIGN-emails.md 8.4) */
+  .vd-tag-chip { transition: box-shadow .12s ease, background-color .12s ease; }
+  .vd-tag-chip:hover { background: #ffffff !important; box-shadow: var(--vd-ring-hover); }
 `;
 
 export const successBannerStyle = {

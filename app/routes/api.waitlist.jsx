@@ -139,7 +139,7 @@ export const action = async ({ request }) => {
         }
 
         const movedUp = previousPosition != null && currentPosition < previousPosition;
-        if (movedUp && rankUpdateAutomation && e.email) {
+        if (movedUp && rankUpdateAutomation && rankUpdateAutomation.active && e.email) {
           try {
             await sendWaitlistRankUpdateEmail({
               to: e.email,
@@ -170,7 +170,7 @@ export const action = async ({ request }) => {
           },
         });
 
-        if (automation) {
+        if (automation && automation.active) {
           const boutiqueLogo = buildLogoUrl(automation);
           const boutiqueName = automation.brandName || drop.shopDomain;
           const brandColor = automation.mainColor || "#1a1a1a";
@@ -186,7 +186,7 @@ export const action = async ({ request }) => {
             position,
             unsubscribeUrl: buildUnsubscribeUrl(entry.id),
           });
-        } else {
+        } else if (!automation) {
           console.warn(
             "waitlist: no WAITLIST_CONFIRMATION automation found for shop",
             drop.shopDomain

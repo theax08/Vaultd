@@ -1,21 +1,19 @@
 // app/routes/app.emails.jsx
 
-import { useLoaderData, useActionData, useSubmit, Link } from "react-router";
+import { useLoaderData, useActionData, useSubmit, useFetcher, Link } from "react-router";
 import { PLAN_ORDER } from "../vaultd-plans";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   popFontFamily,
-  pageHeaderRowStyle,
-  pageHeaderTitleRowStyle,
   pageHeaderTitleStyle,
-  GridIcon,
   cardPadded,
   inputStyle,
   textareaStyle,
   primaryButtonStyle,
-  primaryButtonDisabledStyle,
   secondaryButtonStyle,
-  pillBadge,
+  toggleSwitchStyle,
+  toggleSwitchKnobStyle,
+  monoNumberStyle,
   AutoDismissBanner,
 } from "../styles/pop-ui";
 
@@ -25,6 +23,9 @@ const TYPES = {
   DROP_LIVE: "DROP_LIVE",
   DROP_ENDED: "DROP_ENDED",
 };
+
+const SUBJECT_RECOMMENDED_LIMIT = 60;
+const PREVIEW_SAMPLE_POSITION = 248;
 
 // ==========================================
 // SERVER: loader – Charge ou initialise EmailAutomations
@@ -109,20 +110,9 @@ export const loader = async ({ request }) => {
       "{{drop_name}} is officially closed. Here's how it went.",
   });
 
-  const tabs = [
-    { id: "waitlist", label: "Waitlist Email Rank", type: "WAITLIST_GROUP" },
-    { id: "live", label: "Drop is Live, Get Your Item", type: TYPES.DROP_LIVE },
-    {
-      id: "ended",
-      label: "Drop Ended, Don't Miss the Next Drop",
-      type: TYPES.DROP_ENDED,
-    },
-  ];
-
-  // Pour le selecteur "Drop" : on propose les drops par nom plutot que de
-  // demander de copier-coller leur ID.
-  // Seuls les drops pas encore lances ont besoin d'etre lies a une
-  // automation email : un drop ENDED ne doit plus apparaitre dans la liste.
+  // Pour le selecteur "Drop d'aperçu" : on propose les drops par nom plutot
+  // que de demander de copier-coller leur ID. Seuls les drops pas encore
+  // lances ont besoin d'un aperçu (un drop ENDED n'a plus d'automation a tester).
   const drops = await db.drop.findMany({
     where: { shopDomain, status: "DRAFT" },
     orderBy: { createdAt: "desc" },
@@ -130,16 +120,18 @@ export const loader = async ({ request }) => {
   });
 
   let plan = null;
+  let accountEmail = null;
   try {
     const { getAccountForShop } = await import("../vaultd-account.server");
     const account = await getAccountForShop(shopDomain);
     plan = PLAN_ORDER.includes(account?.plan) ? account.plan : null;
+    accountEmail = account?.email ?? null;
   } catch {}
 
   return {
     defaultShopName,
     plan,
-    tabs,
+    accountEmail,
     drops,
     automationsByType: {
       [TYPES.WAITLIST_CONFIRMATION]: waitlistConfirmation,
@@ -151,7 +143,7 @@ export const loader = async ({ request }) => {
 };
 
 // ==========================================
-// SERVER: action – Sauvegarder une automation
+// SERVER: action
 // ==========================================
 export const action = async ({ request }) => {
   const [{ authenticate }, dbModule] = await Promise.all([
@@ -172,73 +164,148 @@ export const action = async ({ request }) => {
   const formData = await request.formData();
   const intent = formData.get("intent");
 
-  if (intent === "SAVE_TEMPLATE" || intent === "SAVE_AUTOMATION") {
-    const id = formData.get("id")?.toString();
-    const type = formData.get("type")?.toString();
-
+  // Enregistre le modele (marque, couleur, logo, drop d'apercu, objet/corps
+  // par type) pour les 4 automations en une fois — separe de l'activation,
+  // qui a son propre intent immediat plus bas.
+  if (intent === "SAVE_TEMPLATE") {
     const brandName = formData.get("brandName")?.toString() || "";
     const mainColor = formData.get("mainColor")?.toString() || "#1a1a1a";
     const dropExternalId = formData.get("dropExternalId")?.toString() || "";
-    const subject = formData.get("subject")?.toString() || "";
-    const body = formData.get("body")?.toString() || "";
-    const ctaUrl = formData.get("ctaUrl")?.toString() || null;
     const logoUrl = formData.get("logoUrl")?.toString() || null;
 
     let dropId = null;
-
-    // Pour SAVE_TEMPLATE, tu peux éventuellement ignorer dropExternalId/dropId,
-    // ou les laisser tels quels, à toi de décider.
-    if (intent === "SAVE_AUTOMATION" && dropExternalId) {
+    if (dropExternalId) {
       const drop = await db.drop.findFirst({
-        where: {
-          shopDomain,
-          externalId: dropExternalId,
-        },
+        where: { shopDomain, externalId: dropExternalId },
       });
-
       if (!drop) {
-        return { intent, error: "Invalid drop ID. Check it and try again." };
+        return { intent, error: "Invalid preview drop. Check it and try again." };
       }
-      if (drop.status === "ENDED") {
-        return {
-          intent,
-          error: "This drop has ended. Link your automation to an active or upcoming drop instead.",
-        };
-      }
-
       dropId = drop.id;
     }
 
-    if (id) {
-      await db.emailAutomation.update({
+    let perType;
+    try {
+      perType = JSON.parse(formData.get("perType")?.toString() || "{}");
+    } catch {
+      return { intent, error: "Could not read the submitted templates." };
+    }
+
+    await Promise.all(
+      Object.entries(perType).map(([type, fields]) => {
+        const data = {
+          brandName,
+          mainColor,
+          dropExternalId,
+          dropId,
+          subject: fields.subject ?? "",
+          body: fields.body ?? "",
+          ctaUrl: fields.ctaUrl ?? null,
+          logoUrl,
+        };
+        if (fields.id) {
+          return db.emailAutomation.update({ where: { id: fields.id }, data });
+        }
+        return db.emailAutomation.create({ data: { shopDomain, type, active: true, ...data } });
+      })
+    );
+
+    return { intent, success: true };
+  }
+
+  // Interrupteur "Envoi automatique" — reversible, immediat, independant de
+  // l'enregistrement du modele. C'est le seul champ qui gate reellement les
+  // envois (drop-lifecycle.server.js / api.waitlist.jsx verifient `active`).
+  if (intent === "TOGGLE_ACTIVE") {
+    const id = formData.get("id")?.toString();
+    const active = formData.get("active") === "true";
+    if (!id) return { intent, error: "Missing automation." };
+
+    try {
+      const updated = await db.emailAutomation.update({
         where: { id },
-        data: {
-          brandName,
-          mainColor,
-          // Si SAVE_TEMPLATE ne doit PAS lier le drop, tu peux gérer ici :
-          dropExternalId: intent === "SAVE_AUTOMATION" ? dropExternalId : "",
-          dropId: intent === "SAVE_AUTOMATION" ? dropId : null,
-          subject,
-          body,
-          ctaUrl,
-          logoUrl,
-        },
+        data: { active },
       });
-    } else if (type) {
-      await db.emailAutomation.create({
-        data: {
-          shopDomain,
-          type,
-          brandName,
-          mainColor,
-          dropExternalId: intent === "SAVE_AUTOMATION" ? dropExternalId : "",
-          dropId: intent === "SAVE_AUTOMATION" ? dropId : null,
-          subject,
-          body,
-          ctaUrl,
-          logoUrl,
-        },
-      });
+      return { intent, success: true, id, active: updated.active };
+    } catch (err) {
+      console.error("[emails] TOGGLE_ACTIVE failed:", err);
+      // Renvoie l'etat d'avant pour que le client puisse annuler sa mise a
+      // jour optimiste — sans ca l'interrupteur mentirait sur ce qui part vraiment.
+      return { intent, error: "Could not update. Try again.", id, active: !active };
+    }
+  }
+
+  // Envoie un test avec les valeurs actuellement affichees (pas forcement
+  // sauvegardees) a l'adresse du compte Vaultd du marchand.
+  if (intent === "SEND_TEST") {
+    const id = formData.get("id")?.toString();
+    const type = formData.get("type")?.toString();
+    const subject = formData.get("subject")?.toString() || "";
+    const body = formData.get("body")?.toString() || "";
+    const brandName = formData.get("brandName")?.toString() || "";
+    const mainColor = formData.get("mainColor")?.toString() || "#1a1a1a";
+    const ctaUrl = formData.get("ctaUrl")?.toString() || null;
+    const dropName = formData.get("dropName")?.toString() || "Sample Drop";
+
+    const [{ getAccountForShop }, emailAutomations, { buildLogoUrl }] = await Promise.all([
+      import("../vaultd-account.server"),
+      import("../email-automations.server"),
+      import("../unsubscribe.server"),
+    ]);
+
+    const account = await getAccountForShop(shopDomain);
+    if (!account?.email) {
+      return {
+        intent,
+        error: "Add an email to your Vaultd account in Settings first — that's where test emails go.",
+      };
+    }
+
+    const automation = id ? await db.emailAutomation.findUnique({ where: { id } }) : null;
+    const boutiqueLogo = automation ? buildLogoUrl(automation) : "";
+
+    const shared = {
+      to: account.email,
+      boutiqueName: brandName,
+      boutiqueLogo,
+      brandColor: mainColor,
+      subject,
+      body,
+      dropName,
+      unsubscribeUrl: "#",
+    };
+
+    try {
+      if (type === TYPES.WAITLIST_CONFIRMATION) {
+        await emailAutomations.sendWaitlistConfirmationEmail({ ...shared, position: PREVIEW_SAMPLE_POSITION });
+      } else if (type === TYPES.WAITLIST_RANK_UPDATE) {
+        await emailAutomations.sendWaitlistRankUpdateEmail({
+          ...shared,
+          position: PREVIEW_SAMPLE_POSITION,
+          previousPosition: PREVIEW_SAMPLE_POSITION + 5,
+        });
+      } else if (type === TYPES.DROP_LIVE) {
+        await emailAutomations.sendDropLiveEmail({
+          ...shared,
+          position: PREVIEW_SAMPLE_POSITION,
+          openedLabel: new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
+          accessLink: ctaUrl,
+          maxUnits: 100,
+        });
+      } else if (type === TYPES.DROP_ENDED) {
+        await emailAutomations.sendDropEndedEmail({
+          ...shared,
+          soldOut: true,
+          itemsSold: 100,
+          waitlistCount: PREVIEW_SAMPLE_POSITION,
+          nextDropCtaUrl: ctaUrl,
+        });
+      } else {
+        return { intent, error: "Unknown email type." };
+      }
+    } catch (err) {
+      console.error("[emails] SEND_TEST failed:", err);
+      return { intent, error: "Could not send the test email. Try again in a moment." };
     }
 
     return { intent, success: true };
@@ -250,17 +317,69 @@ export const action = async ({ request }) => {
 // ==========================================
 // CLIENT: UI – Page Emails
 // ==========================================
-// Plan minimum par onglet : waitlist = GROWTH+, live/ended = PRO+.
-// rank_update n'est pas un onglet mais une carte a l'interieur de l'onglet
+// Plan minimum par étape : waitlist = GROWTH+, live/ended = PRO+.
+// rank_update n'est pas une étape mais une carte a l'interieur de l'etape
 // waitlist (email de mise a jour de position/referral) — reservee a PRO+,
 // meme si la carte de confirmation de waitlist reste dispo des GROWTH.
-const TAB_MIN_PLAN = { waitlist: "GROWTH", rank_update: "PRO", live: "PRO", ended: "PRO" };
+const STEP_MIN_PLAN = { waitlist: "GROWTH", rank_update: "PRO", live: "PRO", ended: "PRO" };
 
-function isTabLocked(tabId, plan) {
-  const minPlan = TAB_MIN_PLAN[tabId] ?? "PRO";
+function isStepLocked(stepId, plan) {
+  const minPlan = STEP_MIN_PLAN[stepId] ?? "PRO";
   const planIdx = PLAN_ORDER.indexOf(plan);
   const minIdx = PLAN_ORDER.indexOf(minPlan);
   return planIdx < minIdx; // -1 si plan null → toujours locked
+}
+
+const SEQUENCE_STEPS = [
+  { id: "waitlist", label: "Waitlist", condition: "Sent when someone joins the waitlist" },
+  { id: "live", label: "Drop live", condition: "Sent when a drop goes live" },
+  { id: "ended", label: "After the drop", condition: "Sent when a drop ends" },
+];
+
+// Config d'affichage par type
+const CONFIG_BY_TYPE = {
+  [TYPES.WAITLIST_CONFIRMATION]: {
+    title: "Instant confirmation",
+    description: "Sent automatically when a customer joins the waitlist.",
+    meta: ["{{drop_name}}", "{{position}}", "{{brand_name}}"],
+  },
+  [TYPES.WAITLIST_RANK_UPDATE]: {
+    title: "Rank update",
+    description: "Sent when a customer moves up in the waitlist (position improves).",
+    meta: ["{{drop_name}}", "{{position}}", "{{brand_name}}"],
+  },
+  [TYPES.DROP_LIVE]: {
+    title: "Drop is live",
+    description: "Sent when a drop moves to live.",
+    meta: ["{{drop_name}}", "{{position}}", "{{brand_name}}", "{{access_link}}"],
+    ctaLabel: "Destination URL (product page the \"Access\" button opens)",
+  },
+  [TYPES.DROP_ENDED]: {
+    title: "Drop ended",
+    description: "Sent when a drop ends.",
+    meta: ["{{drop_name}}", "{{brand_name}}"],
+    ctaLabel: "Destination URL (where the \"Join the waitlist\" button opens)",
+  },
+};
+
+function resolvePreviewText(text, { dropName, brandName, defaultShopName, ctaUrl }) {
+  if (!text) return "";
+  return text
+    .split("{{drop_name}}").join(dropName || "Your Drop")
+    .split("{{position}}").join(String(PREVIEW_SAMPLE_POSITION))
+    .split("{{brand_name}}").join(brandName || defaultShopName)
+    .split("{{access_link}}").join(ctaUrl || "https://your-store.myshopify.com");
+}
+
+// Pastille d'activation — section 8.2 : un état n'est pas un statut système,
+// c'est une conséquence ("Inactive — no emails sent"), pas d'un mot de jargon.
+function ActivePill({ active, countLabel }) {
+  return (
+    <span className={`vd-pill vd-pill--${active ? "live" : "draft"}`}>
+      <span className="vd-dot" />
+      {countLabel ?? (active ? "Active" : "Inactive — no emails sent")}
+    </span>
+  );
 }
 
 function LockedCard({ title, description, planName }) {
@@ -271,7 +390,6 @@ function LockedCard({ title, description, planName }) {
           <div style={{ fontSize: 14, fontWeight: 700, color: "#1a1a1a" }}>{title}</div>
           <p style={{ fontSize: 12.5, color: "#6d7175", margin: "4px 0 0 0" }}>{description}</p>
         </div>
-        <span style={{ fontSize: 10, color: "#C4C4C4" }}>●</span>
       </div>
       <p style={{ fontSize: 13, color: "#6d7175", marginTop: 14, marginBottom: 0 }}>
         Available on the {planName} plan.{" "}
@@ -281,19 +399,16 @@ function LockedCard({ title, description, planName }) {
   );
 }
 
-function LockedTabMessage({ planName }) {
+function LockedStepPanel({ planName }) {
   return (
-    <div style={{ marginTop: 40, textAlign: "center", padding: "40px 20px" }}>
-      <div style={{ fontSize: 15, fontWeight: 700, color: "#1a1a1a", marginBottom: 8 }}>
+    <div style={{ ...cardPadded, textAlign: "center", padding: "32px 20px" }}>
+      <div style={{ fontSize: 14.5, fontWeight: 700, color: "#1a1a1a", marginBottom: 6 }}>
         Available on the {planName} plan
       </div>
-      <div style={{ fontSize: 13, color: "#6d7175", marginBottom: 20 }}>
-        Upgrade to unlock automated emails for drop events.
-      </div>
-      <Link
-        to="/app/plans"
-        style={{ ...primaryButtonStyle, display: "inline-block", textDecoration: "none" }}
-      >
+      <p style={{ fontSize: 13, color: "#6d7175", margin: "0 0 16px 0" }}>
+        Upgrade to unlock automated emails for this step.
+      </p>
+      <Link to="/app/plans" style={{ ...primaryButtonStyle, display: "inline-block", textDecoration: "none" }}>
         View plans →
       </Link>
     </div>
@@ -301,174 +416,187 @@ function LockedTabMessage({ planName }) {
 }
 
 export default function EmailsPage() {
-  const { defaultShopName, plan, tabs, drops, automationsByType } = useLoaderData();
+  const { defaultShopName, plan, accountEmail, drops, automationsByType } = useLoaderData();
   const actionData = useActionData();
   const submit = useSubmit();
+  const toggleFetcher = useFetcher();
+  const testFetcher = useFetcher();
 
-  const [selectedTabId, setSelectedTabId] = useState(tabs[0].id);
-
-  // Automation base (pour brand + couleur + drop ID)
   const baseAutomation = automationsByType[TYPES.WAITLIST_CONFIRMATION];
 
-  // Brand name laissé vide par défaut (placeholder = defaultShopName)
+  // ---- Modèle (brand + copy) — géré par la SaveBar ----
   const [brandName, setBrandName] = useState(baseAutomation.brandName || "");
-  const [mainColor, setMainColor] = useState(
-    baseAutomation.mainColor || "#1a1a1a"
-  );
-  const [dropExternalId, setDropExternalId] = useState(
-    baseAutomation.dropExternalId || ""
-  );
-  // Texte affiche dans le champ : le nom du drop si on en reconnait un pour
-  // l'ID deja enregistre, sinon l'ID tel quel (saisie manuelle anterieure).
-  const [dropQuery, setDropQuery] = useState(() => {
+  const [mainColor, setMainColor] = useState(baseAutomation.mainColor || "#1a1a1a");
+  const [logoUrl, setLogoUrl] = useState(baseAutomation.logoUrl || "");
+  const [previewDropExternalId, setPreviewDropExternalId] = useState(baseAutomation.dropExternalId || "");
+  const [previewDropQuery, setPreviewDropQuery] = useState(() => {
     const current = baseAutomation.dropExternalId || "";
     const match = drops.find((d) => d.externalId === current);
     return match ? match.name : current;
   });
 
-  const handleDropQueryChange = (value) => {
-    setDropQuery(value);
-    // Si le texte tape correspond exactement au nom d'un drop (cas du clic
-    // sur une suggestion de la datalist), on stocke son vrai ID. Sinon on
-    // suppose que c'est un ID colle a la main.
+  const handlePreviewDropQueryChange = (value) => {
+    setPreviewDropQuery(value);
     const match = drops.find((d) => d.name === value);
-    setDropExternalId(match ? match.externalId : value);
+    setPreviewDropExternalId(match ? match.externalId : value);
   };
 
-  // Logo chargé ou non (input file) + preview. On stocke directement le
-  // data URL base64 (persistant) plutôt qu'un blob: URL (qui ne survit pas
-  // à la sauvegarde et n'est jamais accessible depuis le serveur).
-  const [hasLogo, setHasLogo] = useState(Boolean(baseAutomation.logoUrl));
-  const [logoPreviewUrl, setLogoPreviewUrl] = useState(
-    baseAutomation.logoUrl || ""
-  );
-
-  // Erreur globale si brand name / drop ID manquants (pour SAVE_AUTOMATION)
-  const [showValidationError, setShowValidationError] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-
-  // Statut de connexion du drop (pour le badge Pending / Automated)
-  const [isConnected, setIsConnected] = useState(
-    Boolean(baseAutomation.dropExternalId)
-  );
-
-  // Subject/body par type
   const [subjects, setSubjects] = useState({
-    [TYPES.WAITLIST_CONFIRMATION]:
-      automationsByType[TYPES.WAITLIST_CONFIRMATION].subject,
-    [TYPES.WAITLIST_RANK_UPDATE]:
-      automationsByType[TYPES.WAITLIST_RANK_UPDATE].subject,
+    [TYPES.WAITLIST_CONFIRMATION]: automationsByType[TYPES.WAITLIST_CONFIRMATION].subject,
+    [TYPES.WAITLIST_RANK_UPDATE]: automationsByType[TYPES.WAITLIST_RANK_UPDATE].subject,
     [TYPES.DROP_LIVE]: automationsByType[TYPES.DROP_LIVE].subject,
     [TYPES.DROP_ENDED]: automationsByType[TYPES.DROP_ENDED].subject,
   });
-
   const [bodies, setBodies] = useState({
-    [TYPES.WAITLIST_CONFIRMATION]:
-      automationsByType[TYPES.WAITLIST_CONFIRMATION].body,
-    [TYPES.WAITLIST_RANK_UPDATE]:
-      automationsByType[TYPES.WAITLIST_RANK_UPDATE].body,
+    [TYPES.WAITLIST_CONFIRMATION]: automationsByType[TYPES.WAITLIST_CONFIRMATION].body,
+    [TYPES.WAITLIST_RANK_UPDATE]: automationsByType[TYPES.WAITLIST_RANK_UPDATE].body,
     [TYPES.DROP_LIVE]: automationsByType[TYPES.DROP_LIVE].body,
     [TYPES.DROP_ENDED]: automationsByType[TYPES.DROP_ENDED].body,
   });
-
-  // URL de destination du bouton CTA (page produit pour Drop Live, page de
-  // waitlist du prochain drop pour Drop Ended). Pas utilise pour les emails waitlist.
   const [ctaUrls, setCtaUrls] = useState({
     [TYPES.DROP_LIVE]: automationsByType[TYPES.DROP_LIVE].ctaUrl || "",
     [TYPES.DROP_ENDED]: automationsByType[TYPES.DROP_ENDED].ctaUrl || "",
   });
 
+  // ---- Activation — indépendante du modèle, immédiate ----
+  const [activeStates, setActiveStates] = useState({
+    [TYPES.WAITLIST_CONFIRMATION]: automationsByType[TYPES.WAITLIST_CONFIRMATION].active,
+    [TYPES.WAITLIST_RANK_UPDATE]: automationsByType[TYPES.WAITLIST_RANK_UPDATE].active,
+    [TYPES.DROP_LIVE]: automationsByType[TYPES.DROP_LIVE].active,
+    [TYPES.DROP_ENDED]: automationsByType[TYPES.DROP_ENDED].active,
+  });
+  const [justActivated, setJustActivated] = useState(null); // type juste passe a actif, pour le message ponctuel
+
+  const handleToggleActive = (type) => {
+    const automation = automationsByType[type];
+    const nextActive = !activeStates[type];
+    setActiveStates((prev) => ({ ...prev, [type]: nextActive }));
+    if (nextActive) setJustActivated(type);
+    toggleFetcher.submit(
+      { intent: "TOGGLE_ACTIVE", id: automation.id, active: String(nextActive) },
+      { method: "post" }
+    );
+  };
+
+  // Le toggle est optimiste (il flippe avant la reponse serveur) — si l'appel
+  // echoue, on revient a l'etat reel renvoye par le serveur. Sans ca
+  // l'interrupteur pourrait afficher "Active" alors que rien n'a ete sauvegarde.
   useEffect(() => {
-    if (actionData?.success) {
-      // Dès que la sauvegarde réussit, on met à jour le statut
-      setIsConnected(Boolean(dropExternalId));
-      setIsSaving(false);
-    } else if (actionData?.error) {
-      setIsSaving(false);
-    }
-  }, [actionData, dropExternalId]);
+    const data = toggleFetcher.data;
+    if (data?.intent !== "TOGGLE_ACTIVE" || !data.error || !data.id) return;
+    const type = Object.keys(automationsByType).find((t) => automationsByType[t].id === data.id);
+    if (type) setActiveStates((prev) => ({ ...prev, [type]: data.active }));
+    // eslint-disable-next-line
+  }, [toggleFetcher.data]);
 
-  // SAVE_TEMPLATE : sauvegarde le sujet/texte sans lier de drop precis.
-  // SAVE_AUTOMATION : lie en plus l'automation a un drop via son ID externe
-  // (necessite brandName + dropExternalId).
-  const handleSave = (automation, type, intent) => {
-    if (intent === "SAVE_AUTOMATION" && (!brandName || !dropExternalId)) {
-      setShowValidationError(true);
-      return;
-    }
+  // ---- Snapshot enregistré (pour la SaveBar + Discard) ----
+  const buildSnapshot = () => ({
+    brandName,
+    mainColor,
+    logoUrl,
+    previewDropExternalId,
+    subjects,
+    bodies,
+    ctaUrls,
+  });
+  const [savedSnapshot, setSavedSnapshot] = useState(buildSnapshot);
+  const currentSnapshot = buildSnapshot();
+  const isDirty = JSON.stringify(currentSnapshot) !== JSON.stringify(savedSnapshot);
 
-    setShowValidationError(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (actionData?.intent === "SAVE_TEMPLATE") {
+      if (actionData?.success) {
+        setSavedSnapshot(currentSnapshot);
+        setIsSaving(false);
+      } else if (actionData?.error) {
+        setIsSaving(false);
+      }
+    }
+    // eslint-disable-next-line
+  }, [actionData]);
+
+  const handleSaveTemplate = () => {
     setIsSaving(true);
-
+    const perType = {};
+    for (const type of Object.keys(TYPES).map((k) => TYPES[k])) {
+      perType[type] = {
+        id: automationsByType[type].id,
+        subject: subjects[type],
+        body: bodies[type],
+        ctaUrl: ctaUrls[type] ?? null,
+      };
+    }
     const formData = new FormData();
-    formData.set("intent", intent);
-    formData.set("id", automation.id);
-    formData.set("type", type);
+    formData.set("intent", "SAVE_TEMPLATE");
     formData.set("brandName", brandName);
     formData.set("mainColor", mainColor);
-    formData.set("dropExternalId", dropExternalId);
-    formData.set("subject", subjects[type]);
-    formData.set("body", bodies[type]);
-    formData.set("logoUrl", logoPreviewUrl || "");
-    if (ctaUrls[type] !== undefined) {
-      formData.set("ctaUrl", ctaUrls[type]);
-    }
-
+    formData.set("dropExternalId", previewDropExternalId);
+    formData.set("logoUrl", logoUrl || "");
+    formData.set("perType", JSON.stringify(perType));
     submit(formData, { method: "post" });
   };
 
-  const handleSubjectChange = (type, value) => {
-    setSubjects((prev) => ({ ...prev, [type]: value }));
+  const handleDiscard = () => {
+    setBrandName(savedSnapshot.brandName);
+    setMainColor(savedSnapshot.mainColor);
+    setLogoUrl(savedSnapshot.logoUrl);
+    setPreviewDropExternalId(savedSnapshot.previewDropExternalId);
+    const match = drops.find((d) => d.externalId === savedSnapshot.previewDropExternalId);
+    setPreviewDropQuery(match ? match.name : savedSnapshot.previewDropExternalId);
+    setSubjects(savedSnapshot.subjects);
+    setBodies(savedSnapshot.bodies);
+    setCtaUrls(savedSnapshot.ctaUrls);
   };
 
-  const handleBodyChange = (type, value) => {
-    setBodies((prev) => ({ ...prev, [type]: value }));
+  // ---- Save bar App Bridge (contextuelle, apparait des qu'un champ change) ----
+  const saveBarRef = useRef(null);
+  useEffect(() => {
+    const el = saveBarRef.current;
+    if (!el) return;
+    if (isDirty) {
+      el.show?.();
+    } else {
+      el.hide?.();
+    }
+  }, [isDirty]);
+
+  // ---- Sequence / accordion ----
+  const [openStepId, setOpenStepId] = useState("waitlist");
+  const [previewType, setPreviewType] = useState(TYPES.WAITLIST_CONFIRMATION);
+  const [previewMode, setPreviewMode] = useState("desktop");
+
+  const handleSubjectChange = (type, value) => setSubjects((prev) => ({ ...prev, [type]: value }));
+  const handleBodyChange = (type, value) => setBodies((prev) => ({ ...prev, [type]: value }));
+  const handleCtaUrlChange = (type, value) => setCtaUrls((prev) => ({ ...prev, [type]: value }));
+
+  const handleSendTest = (type) => {
+    testFetcher.submit(
+      {
+        intent: "SEND_TEST",
+        id: automationsByType[type].id,
+        type,
+        subject: subjects[type],
+        body: bodies[type],
+        brandName,
+        mainColor,
+        ctaUrl: ctaUrls[type] ?? "",
+        dropName: previewDropQuery || "Sample Drop",
+      },
+      { method: "post" }
+    );
   };
 
-  const handleCtaUrlChange = (type, value) => {
-    setCtaUrls((prev) => ({ ...prev, [type]: value }));
-  };
-
-  // Config d’affichage par type
-  const configByType = {
-    [TYPES.WAITLIST_CONFIRMATION]: {
-      title: "1. Instant Confirmation",
-      description: "Sent automatically when a user joins the waitlist.",
-      meta: ["{{drop_name}}", "{{position}}", "{{brand_name}}"],
-    },
-    [TYPES.WAITLIST_RANK_UPDATE]: {
-      title: "2. Rank Update",
-      description:
-        "Sent when a customer moves up in the waitlist (position improves).",
-      meta: ["{{drop_name}}", "{{position}}", "{{brand_name}}"],
-    },
-    [TYPES.DROP_LIVE]: {
-      title: "Drop is Live",
-      description: "Sent when a drop moves to LIVE.",
-      meta: ["{{drop_name}}", "{{position}}", "{{brand_name}}", "{{access_link}}"],
-      ctaLabel: "Destination URL (product page the \"Access\" button opens)",
-    },
-    [TYPES.DROP_ENDED]: {
-      title: "Drop Ended",
-      description: "Sent when a drop ends.",
-      meta: ["{{drop_name}}", "{{brand_name}}"],
-      ctaLabel: "Destination URL (where the \"Join the waitlist\" button opens)",
-    },
-  };
-
-  const currentTab = tabs.find((t) => t.id === selectedTabId);
-
-  // Helper pour savoir si la section est complète
-  const sectionIncomplete = !brandName || !hasLogo || !dropExternalId;
+  const previewDropName = previewDropQuery || "Your Drop";
 
   return (
     <div style={{ fontFamily: popFontFamily, minHeight: "100vh", display: "flex", flexDirection: "column" }}>
-
       {(actionData?.success || actionData?.error) && (
         <div style={{ padding: "20px 20px 0" }}>
-          {actionData?.success && (
+          {actionData?.success && actionData?.intent === "SAVE_TEMPLATE" && (
             <div style={{ marginBottom: 12 }}>
-              <AutoDismissBanner message="Changes saved" dismissKey={actionData} />
+              <AutoDismissBanner message="Saved" dismissKey={actionData} />
             </div>
           )}
           {actionData?.error && (
@@ -478,387 +606,534 @@ export default function EmailsPage() {
           )}
         </div>
       )}
-      <div style={{ ...cardPadded, flex: 1, borderRadius: 0 }}>
-          {/* ===== Email customization & automatization ===== */}
-          <div
-            style={{
-              padding: "16px",
-              borderRadius: "12px",
-              backgroundColor: "#f6f6f7",
-            }}
-          >
-            <span style={{ fontSize: 13.5, fontWeight: 700, color: "var(--vaultd-accent, #1a1a1a)" }}>
-              Email customization & automatization
-            </span>
+      {testFetcher.data?.intent === "SEND_TEST" && (
+        <div style={{ padding: "20px 20px 0" }}>
+          {testFetcher.data.success && (
+            <div style={{ marginBottom: 12 }}>
+              <AutoDismissBanner message={`Test sent to ${accountEmail}`} dismissKey={testFetcher.data} />
+            </div>
+          )}
+          {testFetcher.data.error && (
+            <div style={{ marginBottom: 12 }}>
+              <AutoDismissBanner tone="error" message={testFetcher.data.error} dismissKey={testFetcher.data} />
+            </div>
+          )}
+        </div>
+      )}
+      {toggleFetcher.data?.intent === "TOGGLE_ACTIVE" && toggleFetcher.data.error && (
+        <div style={{ padding: "20px 20px 0" }}>
+          <div style={{ marginBottom: 12 }}>
+            <AutoDismissBanner tone="error" message={toggleFetcher.data.error} dismissKey={toggleFetcher.data} />
+          </div>
+        </div>
+      )}
 
-            <div
-              style={{
-                display: "flex",
-                gap: "32px",
-                marginTop: "12px",
-                alignItems: "center",
-                justifyContent: "space-between",
-                flexWrap: "nowrap",
-              }}
-            >
-              {/* Carré Upload avec preview */}
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "flex-start",
-                }}
-              >
-                <label
-                  style={{
-                    display: "inline-flex",
-                    width: "80px",
-                    height: "80px",
-                    borderRadius: "12px",
-                    border: "1px dashed #C9CCCF",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: "12px",
-                    color: "#6D7175",
-                    cursor: "pointer",
-                    background: "#FFFFFF",
-                    flexShrink: 0,
-                    overflow: "hidden",
-                  }}
-                >
-                  {logoPreviewUrl ? (
-                    <img
-                      src={logoPreviewUrl}
-                      alt="Logo preview"
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        objectFit: "cover",
-                      }}
-                    />
-                  ) : (
-                    "Upload"
-                  )}
-                  <input
-                    type="file"
-                    accept="image/png,image/jpeg"
-                    style={{ display: "none" }}
-                    onChange={(e) => {
-                      const file = e.target.files && e.target.files[0];
-                      if (!file) {
-                        setHasLogo(false);
-                        setLogoPreviewUrl("");
-                        return;
-                      }
-                      const reader = new FileReader();
-                      reader.onload = () => {
-                        setHasLogo(true);
-                        setLogoPreviewUrl(reader.result);
-                      };
-                      reader.readAsDataURL(file);
-                    }}
-                  />
-                </label>
-              </div>
+      <div style={{ padding: "16px 20px 0" }}>
+        <h1 style={pageHeaderTitleStyle}>Emails</h1>
+      </div>
 
-              {/* Brand name – barre large */}
-              <div style={{ flex: 1 }}>
-                <span style={{ marginBottom: 6, display: "block", fontSize: 13, color: "#6d7175" }}>
-                  Brand name
-                </span>
-                <input
-                  type="text"
-                  value={brandName}
-                  onChange={(e) => setBrandName(e.target.value)}
-                  placeholder={defaultShopName}
-                  style={{
-                    border: "1px solid #C9CCCF",
-                    borderRadius: "8px",
-                    padding: "8px 10px",
-                    fontSize: "14px",
-                    width: "100%",
-                    boxSizing: "border-box",
-                  }}
-                />
-              </div>
+      <CompactBrandBar
+        brandName={brandName}
+        setBrandName={setBrandName}
+        mainColor={mainColor}
+        setMainColor={setMainColor}
+        logoUrl={logoUrl}
+        setLogoUrl={setLogoUrl}
+        defaultShopName={defaultShopName}
+      />
 
-              {/* Main color : carré de couleur + hex */}
-              <div style={{ flex: 1, maxWidth: "260px" }}>
-                <span style={{ marginBottom: 6, display: "block", fontSize: 13, color: "#6d7175" }}>
-                  Main color
-                </span>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                  }}
-                >
-                  {/* Carré 32x32 sans espace blanc entre bord et couleur */}
-                  <style>{`
-                    .vaultd-color-input::-webkit-color-swatch-wrapper { padding: 0; }
-                    .vaultd-color-input::-webkit-color-swatch { border: none; border-radius: 7px; }
-                    .vaultd-color-input::-moz-color-swatch { border: none; border-radius: 7px; }
-                  `}</style>
+      <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
+        {/* ===== SÉQUENCE (accordéon) ===== */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px 32px" }}>
+          {SEQUENCE_STEPS.map((step, index) => {
+            const locked = isStepLocked(step.id, plan);
+            const isOpen = openStepId === step.id;
+            const stepTypes =
+              step.id === "waitlist"
+                ? [TYPES.WAITLIST_CONFIRMATION, TYPES.WAITLIST_RANK_UPDATE]
+                : step.id === "live"
+                ? [TYPES.DROP_LIVE]
+                : [TYPES.DROP_ENDED];
+            const unlockedTypes = stepTypes.filter((t) => !isStepLocked(t === TYPES.WAITLIST_RANK_UPDATE ? "rank_update" : step.id, plan));
+            const activeCount = unlockedTypes.filter((t) => activeStates[t]).length;
+
+            return (
+              <div key={step.id} style={{ display: "flex", gap: 14 }}>
+                {/* Filet + point */}
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 16, flexShrink: 0 }}>
                   <div
                     style={{
-                      width: "32px",
-                      height: "32px",
-                      borderRadius: "8px",
-                      border: "1px solid #C9CCCF",
-                      overflow: "hidden",
-                      padding: 0,
+                      width: 9,
+                      height: 9,
+                      borderRadius: "50%",
+                      marginTop: 18,
                       flexShrink: 0,
-                    }}
-                  >
-                    <input
-                      type="color"
-                      className="vaultd-color-input"
-                      value={mainColor}
-                      onChange={(e) => setMainColor(e.target.value)}
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        border: "none",
-                        padding: 0,
-                        margin: 0,
-                        cursor: "pointer",
-                        appearance: "none",
-                        WebkitAppearance: "none",
-                        background: "transparent",
-                      }}
-                    />
-                  </div>
-                  <input
-                    type="text"
-                    value={mainColor}
-                    onChange={(e) => setMainColor(e.target.value)}
-                    placeholder="#000000"
-                    style={{
-                      border: "1px solid #C9CCCF",
-                      borderRadius: "8px",
-                      padding: "8px 10px",
-                      fontSize: "14px",
-                      width: "100%",
+                      background: isOpen ? "var(--vd-ink, #14181F)" : "transparent",
+                      boxShadow: isOpen ? "none" : "inset 0 0 0 1.5px var(--vd-ink-3, #8B93A0)",
                     }}
                   />
+                  {index < SEQUENCE_STEPS.length - 1 && (
+                    <div style={{ width: 1, flex: 1, background: "var(--vd-hairline, #E3E3E3)", marginTop: 6 }} />
+                  )}
+                </div>
+
+                {/* Contenu de l'étape */}
+                <div style={{ flex: 1, minWidth: 0, paddingBottom: 22 }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenStepId(isOpen ? null : step.id);
+                      if (!isOpen) setPreviewType(unlockedTypes[0] ?? stepTypes[0]);
+                    }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      width: "100%",
+                      background: "none",
+                      border: "none",
+                      padding: "6px 0",
+                      cursor: "pointer",
+                      textAlign: "left",
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontSize: 14.5, fontWeight: 700, color: "#1a1a1a" }}>{step.label}</div>
+                      <div style={{ fontSize: 12.5, color: "#6d7175", marginTop: 2 }}>{step.condition}</div>
+                    </div>
+                    {!locked && (
+                      <ActivePill
+                        active={activeCount > 0}
+                        countLabel={
+                          unlockedTypes.length > 1
+                            ? `${step.label} · ${activeCount}/${unlockedTypes.length} active`
+                            : undefined
+                        }
+                      />
+                    )}
+                  </button>
+
+                  {isOpen && (
+                    <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 14 }}>
+                      {locked ? (
+                        <LockedStepPanel planName="Pro" />
+                      ) : (
+                        stepTypes.map((type) => {
+                          const typeLocked = isStepLocked(
+                            type === TYPES.WAITLIST_RANK_UPDATE ? "rank_update" : step.id,
+                            plan
+                          );
+                          if (typeLocked) {
+                            return (
+                              <LockedCard
+                                key={type}
+                                title={CONFIG_BY_TYPE[type].title}
+                                description={CONFIG_BY_TYPE[type].description}
+                                planName="Pro"
+                              />
+                            );
+                          }
+                          return (
+                            <AutomationEditor
+                              key={type}
+                              type={type}
+                              automation={automationsByType[type]}
+                              config={CONFIG_BY_TYPE[type]}
+                              subject={subjects[type]}
+                              body={bodies[type]}
+                              ctaUrl={ctaUrls[type]}
+                              active={activeStates[type]}
+                              justActivated={justActivated === type}
+                              onSubjectChange={handleSubjectChange}
+                              onBodyChange={handleBodyChange}
+                              onCtaUrlChange={handleCtaUrlChange}
+                              onToggleActive={() => handleToggleActive(type)}
+                              onFocusField={() => setPreviewType(type)}
+                              onSendTest={() => handleSendTest(type)}
+                              isSendingTest={
+                                testFetcher.state !== "idle" &&
+                                testFetcher.formData?.get("type") === type
+                              }
+                            />
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
+            );
+          })}
+        </div>
 
-              {/* Drop : champ unique "2 en 1" -- cliquer dedans propose les
-                  drops par nom (datalist native), mais on peut aussi taper
-                  ou coller un ID directement dans le meme champ. */}
-              <div style={{ flex: 1, maxWidth: "260px" }}>
-                <span style={{ marginBottom: 6, display: "block", fontSize: 13, color: "#6d7175" }}>
-                  Drop
-                </span>
-                <input
-                  type="text"
-                  list="vaultd-drops-datalist"
-                  value={dropQuery}
-                  onChange={(e) => handleDropQueryChange(e.target.value)}
-                  placeholder="Search a drop or paste an ID"
-                  style={{
-                    border: "1px solid #C9CCCF",
-                    borderRadius: "8px",
-                    padding: "8px 10px",
-                    fontSize: "14px",
-                    width: "100%",
-                    boxSizing: "border-box",
-                  }}
-                />
-                <datalist id="vaultd-drops-datalist">
-                  {drops.map((d) => (
-                    <option key={d.externalId} value={d.name} />
-                  ))}
-                </datalist>
-              </div>
-            </div>
+        {/* ===== APERÇU (sticky) ===== */}
+        <div
+          style={{
+            width: 340,
+            flexShrink: 0,
+            borderLeft: "1px solid var(--vd-hairline, #e3e3e3)",
+            padding: 16,
+            overflowY: "auto",
+          }}
+        >
+          <PreviewPanel
+            config={CONFIG_BY_TYPE[previewType]}
+            subject={resolvePreviewText(subjects[previewType], { dropName: previewDropName, brandName, defaultShopName, ctaUrl: ctaUrls[previewType] })}
+            body={resolvePreviewText(bodies[previewType], { dropName: previewDropName, brandName, defaultShopName, ctaUrl: ctaUrls[previewType] })}
+            brandName={brandName || defaultShopName}
+            mainColor={mainColor}
+            logoUrl={logoUrl}
+            ctaLabel={CONFIG_BY_TYPE[previewType].ctaLabel ? "Access drop" : null}
+            previewMode={previewMode}
+            setPreviewMode={setPreviewMode}
+            drops={drops}
+            previewDropQuery={previewDropQuery}
+            onPreviewDropQueryChange={handlePreviewDropQueryChange}
+          />
+        </div>
+      </div>
 
-            {/* Message d'erreur global de la section */}
-            {showValidationError && sectionIncomplete && (
-              <div
+      {/* ===== Barre de sauvegarde contextuelle (App Bridge) ===== */}
+      <ui-save-bar id="vaultd-emails-save-bar" ref={saveBarRef} discardConfirmation="true">
+        <button type="button" variant="primary" onClick={handleSaveTemplate} loading={isSaving ? "" : undefined}>
+          Save
+        </button>
+        <button type="button" onClick={handleDiscard}>Discard</button>
+      </ui-save-bar>
+    </div>
+  );
+}
+
+/**
+ * Barre de marque compacte (8.7) — une ligne au repos, se déplie pour éditer.
+ */
+function CompactBrandBar({ brandName, setBrandName, mainColor, setMainColor, logoUrl, setLogoUrl, defaultShopName }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div style={{ padding: "12px 20px 0" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          padding: "10px 14px",
+          height: 56,
+          boxSizing: "border-box",
+          borderRadius: "var(--vd-radius-sm, 8px)",
+          background: "var(--vd-subtle, #F5F6F7)",
+        }}
+      >
+        <div
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 8,
+            overflow: "hidden",
+            flexShrink: 0,
+            background: "#ffffff",
+            border: "1px solid var(--vd-hairline, #e3e3e3)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          {logoUrl ? (
+            <img src={logoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          ) : (
+            <span style={{ fontSize: 10, color: "#919191" }}>Logo</span>
+          )}
+        </div>
+        <div style={{ fontSize: 13.5, fontWeight: 700, color: "#1a1a1a", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {brandName || defaultShopName}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ width: 14, height: 14, borderRadius: 4, background: mainColor, flexShrink: 0, border: "1px solid rgba(0,0,0,0.08)" }} />
+          <span style={{ fontSize: 11.5, color: "#6d7175", ...monoNumberStyle }}>{mainColor}</span>
+        </div>
+        <span style={{ fontSize: 11.5, color: "#919191" }}>Applied to all 3 emails</span>
+        <button type="button" onClick={() => setExpanded((v) => !v)} style={secondaryButtonStyle}>
+          {expanded ? "Done" : "Edit brand"}
+        </button>
+      </div>
+
+      {expanded && (
+        <div
+          style={{
+            padding: "16px",
+            borderRadius: "0 0 var(--vd-radius-sm, 8px) var(--vd-radius-sm, 8px)",
+            background: "var(--vd-subtle, #F5F6F7)",
+            marginTop: -1,
+          }}
+        >
+          <div style={{ display: "flex", gap: "32px", alignItems: "flex-start", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 6 }}>
+              <label
                 style={{
-                  marginTop: "8px",
+                  display: "inline-flex",
+                  width: "80px",
+                  height: "80px",
+                  borderRadius: "12px",
+                  border: "1px dashed #C9CCCF",
+                  alignItems: "center",
+                  justifyContent: "center",
                   fontSize: "12px",
-                  color: "#D82C0D",
-                  textAlign: "right",
+                  color: "#6D7175",
+                  cursor: "pointer",
+                  background: "#FFFFFF",
+                  flexShrink: 0,
+                  overflow: "hidden",
                 }}
               >
-                Section must be completed*
+                {logoUrl ? (
+                  <img src={logoUrl} alt="Logo preview" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                ) : (
+                  "Upload"
+                )}
+                <input
+                  type="file"
+                  accept="image/png,image/svg+xml,image/jpeg"
+                  style={{ display: "none" }}
+                  onChange={(e) => {
+                    const file = e.target.files && e.target.files[0];
+                    if (!file) {
+                      setLogoUrl("");
+                      return;
+                    }
+                    const reader = new FileReader();
+                    reader.onload = () => setLogoUrl(reader.result);
+                    reader.readAsDataURL(file);
+                  }}
+                />
+              </label>
+              <span style={{ fontSize: 11, color: "#919191", maxWidth: 90 }}>PNG or SVG, 512px min</span>
+            </div>
+
+            <div style={{ flex: 1, minWidth: 180 }}>
+              <span style={{ marginBottom: 6, display: "block", fontSize: 13, color: "#6d7175" }}>Brand name</span>
+              <input
+                type="text"
+                value={brandName}
+                onChange={(e) => setBrandName(e.target.value)}
+                placeholder={defaultShopName}
+                style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}
+              />
+            </div>
+
+            <div style={{ flex: 1, minWidth: 180, maxWidth: "260px" }}>
+              <span style={{ marginBottom: 6, display: "block", fontSize: 13, color: "#6d7175" }}>Main color</span>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <style>{`
+                  .vaultd-color-input::-webkit-color-swatch-wrapper { padding: 0; }
+                  .vaultd-color-input::-webkit-color-swatch { border: none; border-radius: 7px; }
+                  .vaultd-color-input::-moz-color-swatch { border: none; border-radius: 7px; }
+                `}</style>
+                <div style={{ width: "32px", height: "32px", borderRadius: "8px", border: "1px solid #C9CCCF", overflow: "hidden", padding: 0, flexShrink: 0 }}>
+                  <input
+                    type="color"
+                    className="vaultd-color-input"
+                    value={mainColor}
+                    onChange={(e) => setMainColor(e.target.value)}
+                    style={{ width: "100%", height: "100%", border: "none", padding: 0, margin: 0, cursor: "pointer", appearance: "none", WebkitAppearance: "none", background: "transparent" }}
+                  />
+                </div>
+                <input
+                  type="text"
+                  value={mainColor}
+                  onChange={(e) => setMainColor(e.target.value)}
+                  placeholder="#000000"
+                  style={{ ...inputStyle, width: "100%" }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Panneau d'aperçu permanent (8.5) — le manque principal de l'ancien écran.
+ */
+function PreviewPanel({
+  config,
+  subject,
+  body,
+  brandName,
+  mainColor,
+  logoUrl,
+  ctaLabel,
+  previewMode,
+  setPreviewMode,
+  drops,
+  previewDropQuery,
+  onPreviewDropQueryChange,
+}) {
+  const frameWidth = previewMode === "mobile" ? 260 : 320;
+
+  return (
+    <div style={{ position: "sticky", top: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: "#919191", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+          Preview
+        </span>
+        <div style={{ display: "flex", borderRadius: 7, overflow: "hidden", border: "1px solid var(--vd-hairline, #e3e3e3)" }}>
+          <button
+            type="button"
+            onClick={() => setPreviewMode("desktop")}
+            style={{
+              padding: "4px 10px",
+              border: "none",
+              background: previewMode === "desktop" ? "#1a1a1a" : "#ffffff",
+              color: previewMode === "desktop" ? "#ffffff" : "#6d7175",
+              fontSize: 11.5,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            Desktop
+          </button>
+          <button
+            type="button"
+            onClick={() => setPreviewMode("mobile")}
+            style={{
+              padding: "4px 10px",
+              border: "none",
+              background: previewMode === "mobile" ? "#1a1a1a" : "#ffffff",
+              color: previewMode === "mobile" ? "#ffffff" : "#6d7175",
+              fontSize: 11.5,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            Mobile
+          </button>
+        </div>
+      </div>
+
+      <div
+        style={{
+          background: "#f0f0f0",
+          borderRadius: 12,
+          padding: 16,
+          display: "flex",
+          justifyContent: "center",
+        }}
+      >
+        <div
+          style={{
+            width: frameWidth,
+            maxWidth: "100%",
+            background: "#ffffff",
+            borderRadius: 8,
+            boxShadow: "var(--vd-ring, 0 0 0 1px rgba(20,24,31,.07))",
+            overflow: "hidden",
+          }}
+        >
+          <div style={{ padding: "18px 16px 14px", textAlign: "center", borderBottom: "1px solid var(--vd-hairline, #f0f0f0)" }}>
+            {logoUrl ? (
+              <img src={logoUrl} alt="" style={{ width: 36, height: 36, borderRadius: 8, objectFit: "cover", margin: "0 auto 8px" }} />
+            ) : (
+              <div style={{ width: 36, height: 36, borderRadius: 8, background: "#f2f2f2", margin: "0 auto 8px" }} />
+            )}
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#1a1a1a" }}>{brandName}</div>
+          </div>
+          <div style={{ padding: "16px" }}>
+            <div style={{ fontSize: 10.5, color: "#919191", marginBottom: 4 }}>Subject</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#1a1a1a", marginBottom: 14 }}>
+              {subject || "(empty subject)"}
+            </div>
+            <div style={{ fontSize: 12.5, color: "#303030", whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
+              {body || "(empty message)"}
+            </div>
+            {ctaLabel && (
+              <div style={{ marginTop: 16, textAlign: "center" }}>
+                <span
+                  style={{
+                    display: "inline-block",
+                    background: mainColor,
+                    color: "#ffffff",
+                    fontSize: 12.5,
+                    fontWeight: 600,
+                    padding: "8px 18px",
+                    borderRadius: 7,
+                  }}
+                >
+                  {ctaLabel}
+                </span>
               </div>
             )}
           </div>
+        </div>
+      </div>
 
-          {/* ===== TABS ===== */}
-          <div
-            style={{
-              display: "flex",
-              borderBottom: "1px solid #E4E5E7",
-              marginTop: "24px",
-            }}
-          >
-            {tabs.map((tab) => {
-              const locked = isTabLocked(tab.id, plan);
-              const isActive = selectedTabId === tab.id;
-              return (
-                <div
-                  key={tab.id}
-                  onClick={() => setSelectedTabId(tab.id)}
-                  style={{
-                    padding: "12px 16px",
-                    cursor: "pointer",
-                    fontSize: "14px",
-                    fontWeight: isActive ? "600" : "400",
-                    color: locked
-                      ? "#C4C4C4"
-                      : isActive
-                      ? "var(--vaultd-accent, #202223)"
-                      : "#6D7175",
-                    borderBottom: isActive
-                      ? "3px solid var(--vaultd-accent, #000000)"
-                      : "3px solid transparent",
-                    transition: "all 0.15s ease",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 5,
-                  }}
-                >
-                  {tab.label}
-                  {locked && (
-                    <span style={{ fontSize: 10, color: "#C4C4C4" }}>●</span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          {/* ===== CONTENUS ===== */}
-
-          {currentTab.id === "waitlist" && (
-            <div
-              style={{
-                marginTop: "16px",
-                display: "flex",
-                flexDirection: "column",
-                gap: "16px",
-              }}
-            >
-              <AutomationCard
-                type={TYPES.WAITLIST_CONFIRMATION}
-                brandName={brandName}
-                mainColor={mainColor}
-                dropExternalId={dropExternalId}
-                automation={automationsByType[TYPES.WAITLIST_CONFIRMATION]}
-                subjects={subjects}
-                bodies={bodies}
-                config={configByType[TYPES.WAITLIST_CONFIRMATION]}
-                onSubjectChange={handleSubjectChange}
-                onBodyChange={handleBodyChange}
-                onSave={handleSave}
-                isConnected={isConnected}
-                isSaving={isSaving}
-              />
-              {isTabLocked("rank_update", plan) ? (
-                <LockedCard
-                  title="2. Rank Update"
-                  description="Sent when a customer moves up in the waitlist (position improves)."
-                  planName="Pro"
-                />
-              ) : (
-                <AutomationCard
-                  type={TYPES.WAITLIST_RANK_UPDATE}
-                  brandName={brandName}
-                  mainColor={mainColor}
-                  dropExternalId={dropExternalId}
-                  automation={automationsByType[TYPES.WAITLIST_RANK_UPDATE]}
-                  subjects={subjects}
-                  bodies={bodies}
-                  config={configByType[TYPES.WAITLIST_RANK_UPDATE]}
-                  onSubjectChange={handleSubjectChange}
-                  onBodyChange={handleBodyChange}
-                  onSave={handleSave}
-                  isConnected={isConnected}
-                  isSaving={isSaving}
-                />
-              )}
-            </div>
-          )}
-
-          {currentTab.id === "live" && (
-            isTabLocked("live", plan) ? (
-              <LockedTabMessage planName="Pro" />
-            ) : (
-              <div style={{ marginTop: "16px" }}>
-                <AutomationCard
-                  type={TYPES.DROP_LIVE}
-                  brandName={brandName}
-                  mainColor={mainColor}
-                  dropExternalId={dropExternalId}
-                  automation={automationsByType[TYPES.DROP_LIVE]}
-                  subjects={subjects}
-                  bodies={bodies}
-                  config={configByType[TYPES.DROP_LIVE]}
-                  onSubjectChange={handleSubjectChange}
-                  onBodyChange={handleBodyChange}
-                  onSave={handleSave}
-                  isConnected={isConnected}
-                  isSaving={isSaving}
-                  ctaUrl={ctaUrls[TYPES.DROP_LIVE]}
-                  onCtaUrlChange={handleCtaUrlChange}
-                />
-              </div>
-            )
-          )}
-
-          {currentTab.id === "ended" && (
-            isTabLocked("ended", plan) ? (
-              <LockedTabMessage planName="Pro" />
-            ) : (
-              <div style={{ marginTop: "16px" }}>
-                <AutomationCard
-                  type={TYPES.DROP_ENDED}
-                  brandName={brandName}
-                  mainColor={mainColor}
-                  dropExternalId={dropExternalId}
-                  automation={automationsByType[TYPES.DROP_ENDED]}
-                  subjects={subjects}
-                  bodies={bodies}
-                  config={configByType[TYPES.DROP_ENDED]}
-                  onSubjectChange={handleSubjectChange}
-                  onBodyChange={handleBodyChange}
-                  onSave={handleSave}
-                  isConnected={isConnected}
-                  isSaving={isSaving}
-                  ctaUrl={ctaUrls[TYPES.DROP_ENDED]}
-                  onCtaUrlChange={handleCtaUrlChange}
-                />
-              </div>
-            )
-          )}
+      <div style={{ marginTop: 12 }}>
+        <span style={{ fontSize: 11.5, color: "#6d7175", display: "block", marginBottom: 4 }}>
+          Preview drop — sample data source
+        </span>
+        <input
+          type="text"
+          list="vaultd-preview-drops-datalist"
+          value={previewDropQuery}
+          onChange={(e) => onPreviewDropQueryChange(e.target.value)}
+          placeholder="Search a drop or paste an ID"
+          style={{ ...inputStyle, fontSize: 12.5 }}
+        />
+        <datalist id="vaultd-preview-drops-datalist">
+          {drops.map((d) => (
+            <option key={d.externalId} value={d.name} />
+          ))}
+        </datalist>
       </div>
     </div>
   );
 }
 
 /**
- * Composant réutilisable pour une carte d’automation
+ * Carte d'édition d'une automation (8.1, 8.2, 8.3, 8.4, 8.9).
  */
-function AutomationCard({
+function AutomationEditor({
   type,
-  automation,
-  subjects,
-  bodies,
   config,
+  subject,
+  body,
+  ctaUrl,
+  active,
+  justActivated,
   onSubjectChange,
   onBodyChange,
-  onSave,
-  isConnected,
-  isSaving,
-  ctaUrl,
   onCtaUrlChange,
+  onToggleActive,
+  onFocusField,
+  onSendTest,
+  isSendingTest,
 }) {
-  const statusLabel = isConnected ? "⚡ Automated" : "⏱ Pending";
+  const activeFieldRef = useRef(null); // ref vers le <input>/<textarea> actuellement focus
+
+  const insertTagAtCursor = (tag) => {
+    const field = activeFieldRef.current;
+    // Seuls objet et message acceptent des tags — l'URL de destination n'en
+    // a pas besoin, et y inserer ecrirait dans le mauvais champ d'etat.
+    if (!field || (field.name !== "subject" && field.name !== "body")) return;
+    const isSubjectField = field.name === "subject";
+    const value = isSubjectField ? subject : body;
+    const start = field.selectionStart ?? value.length;
+    const end = field.selectionEnd ?? value.length;
+    const nextValue = value.slice(0, start) + tag + value.slice(end);
+
+    if (isSubjectField) onSubjectChange(type, nextValue);
+    else onBodyChange(type, nextValue);
+
+    requestAnimationFrame(() => {
+      field.focus();
+      const cursor = start + tag.length;
+      field.setSelectionRange(cursor, cursor);
+    });
+  };
+
+  const subjectLen = subject.length;
+  const overSubjectLimit = subjectLen > SUBJECT_RECOMMENDED_LIMIT;
 
   return (
     <div style={cardPadded}>
@@ -871,60 +1146,86 @@ function AutomationCard({
             {config.description}
           </p>
         </div>
-        <span style={pillBadge(isConnected ? "success" : "warning")}>
-          {statusLabel}
-        </span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          <span style={{ fontSize: 12, color: "#6d7175" }}>Automatic sending</span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={active}
+            onClick={onToggleActive}
+            style={toggleSwitchStyle(active)}
+          >
+            <span style={toggleSwitchKnobStyle(active)} />
+          </button>
+        </div>
       </div>
+
+      <div style={{ marginTop: 8 }}>
+        <ActivePill active={active} />
+      </div>
+
+      {justActivated && (
+        <p style={{ fontSize: 12, color: "#6d7175", marginTop: 8, marginBottom: 0 }}>
+          Turned on — it'll send the next time this happens.
+        </p>
+      )}
 
       <div>
         <div style={{ marginTop: 16 }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--vaultd-accent, #1a1a1a)" }}>Email Subject</span>
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--vaultd-accent, #1a1a1a)" }}>Email subject</span>
+            <span style={{ fontSize: 11, color: overSubjectLimit ? "#c2410c" : "#919191", ...monoNumberStyle }}>
+              {subjectLen} / {SUBJECT_RECOMMENDED_LIMIT}
+            </span>
+          </div>
           <input
             type="text"
             name="subject"
-            value={subjects[type]}
+            onFocus={(e) => {
+              activeFieldRef.current = e.target;
+              onFocusField();
+            }}
+            value={subject}
             onChange={(e) => onSubjectChange(type, e.target.value)}
             style={{ ...inputStyle, marginTop: 8 }}
           />
         </div>
 
         <div style={{ marginTop: 16 }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--vaultd-accent, #1a1a1a)" }}>Message Content</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--vaultd-accent, #1a1a1a)" }}>Message content</span>
           <textarea
             name="body"
             rows={8}
-            value={bodies[type]}
-            onChange={(e) => onBodyChange(type, e.target.value)}
-            style={{ ...textareaStyle, marginTop: 8 }}
-          />
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              alignItems: "center",
-              gap: "8px",
-              marginTop: "8px",
-              marginBottom: "20px",
+            onFocus={(e) => {
+              activeFieldRef.current = e.target;
+              onFocusField();
             }}
-          >
-            <span style={{ fontSize: 12, color: "#6d7175" }}>Tags :</span>
+            value={body}
+            onChange={(e) => onBodyChange(type, e.target.value)}
+            style={{ ...textareaStyle, fontFamily: "var(--vd-sans, inherit)", marginTop: 8 }}
+          />
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px", marginTop: "8px", marginBottom: "20px" }}>
+            <span style={{ fontSize: 12, color: "#6d7175" }}>Insert:</span>
             {config.meta.map((tag) => (
-              <span
+              <button
                 key={tag}
+                type="button"
+                className="vd-tag-chip"
+                onClick={() => insertTagAtCursor(tag)}
                 style={{
                   display: "inline-block",
                   fontSize: "12px",
-                  fontFamily:
-                    "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-                  background: "#F0F0F0",
-                  border: "1px solid var(--vaultd-accent, #D1D1D1)",
-                  color: "var(--vaultd-accent, #5C5F62)",
+                  fontFamily: "var(--vd-mono, ui-monospace, monospace)",
+                  background: "var(--vd-sched-bg, #FFF4DC)",
+                  color: "var(--vd-sched-fg, #7A5600)",
+                  border: "1px solid transparent",
                   borderRadius: "6px",
                   padding: "6px 12px",
+                  cursor: "pointer",
                 }}
               >
                 {tag}
-              </span>
+              </button>
             ))}
           </div>
         </div>
@@ -935,6 +1236,10 @@ function AutomationCard({
             <input
               type="url"
               name="ctaUrl"
+              onFocus={(e) => {
+                activeFieldRef.current = e.target;
+                onFocusField();
+              }}
               value={ctaUrl}
               onChange={(e) => onCtaUrlChange(type, e.target.value)}
               placeholder="https://your-store.myshopify.com/products/..."
@@ -943,24 +1248,14 @@ function AutomationCard({
           </div>
         )}
 
-        {/* Bouton noir, vrai bouton, avec espace au-dessus */}
         <div style={{ display: "flex", gap: 8, marginTop: 20, justifyContent: "flex-end" }}>
           <button
             type="button"
-            disabled={isSaving}
-            onClick={() => onSave(automation, type, "SAVE_TEMPLATE")}
-            style={isSaving ? { ...secondaryButtonStyle, opacity: 0.6, cursor: "default" } : secondaryButtonStyle}
+            disabled={isSendingTest}
+            onClick={onSendTest}
+            style={isSendingTest ? { ...secondaryButtonStyle, opacity: 0.6, cursor: "default" } : secondaryButtonStyle}
           >
-            {isSaving ? "Saving..." : "Save"}
-          </button>
-
-          <button
-            type="button"
-            disabled={isSaving}
-            onClick={() => onSave(automation, type, "SAVE_AUTOMATION")}
-            style={isSaving ? primaryButtonDisabledStyle : primaryButtonStyle}
-          >
-            {isSaving ? "Saving..." : "Save automation"}
+            {isSendingTest ? "Sending…" : "Send a test"}
           </button>
         </div>
       </div>
