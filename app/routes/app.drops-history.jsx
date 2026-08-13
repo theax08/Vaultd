@@ -1,6 +1,6 @@
 import React from "react";
 import { useLoaderData, Link } from "react-router";
-import { GridIcon, pageHeaderTitleStyle, HighlightText, PlanLockedPage } from "../styles/pop-ui";
+import { GridIcon, pageHeaderTitleStyle, HighlightText, PlanLockedPage, monoNumberStyle } from "../styles/pop-ui";
 import { getAccountForShop } from "../vaultd-account.server";
 import { PLAN_ORDER } from "../vaultd-plans";
 
@@ -151,7 +151,7 @@ export const loader = async ({ request }) => {
         ? drop.finalConversionRate
         : null;
     const convRateLabel =
-      convRateNumber != null ? `${convRateNumber.toFixed(1)}%` : "N/A";
+      convRateNumber != null ? `${convRateNumber.toFixed(1)}%` : "—";
 
     // ICI : on utilise les relations si les champs "final*" ne sont pas remplis
     const waitlistCount =
@@ -222,7 +222,7 @@ export const loader = async ({ request }) => {
       current.revenueDelta = `${prefix}${absPct}% vs prev`;
       current.revenueDeltaPrefix = prefix === "+" ? "+" : "-";
     } else if (!previous) {
-      current.revenueDelta = "N/A (1st drop)";
+      current.revenueDelta = "1st drop";
       current.revenueDeltaPrefix = null;
     } else {
       current.revenueDelta = "—";
@@ -246,7 +246,7 @@ export const loader = async ({ request }) => {
       current.conversionDelta = `${prefix}${absPct}%`;
       current.conversionDeltaPrefix = prefix === "+" ? "+" : "-";
     } else if (!previous) {
-      current.conversionDelta = "N/A";
+      current.conversionDelta = "1st drop";
       current.conversionDeltaPrefix = null;
     } else {
       current.conversionDelta = "—";
@@ -345,9 +345,9 @@ export default function DropsHistoryPage() {
   const avgConvLabel =
     summary.avgConvRate != null
       ? `${summary.avgConvRate.toFixed(1)}%`
-      : "N/A";
-  const avgSelloutLabel = summary.avgSelloutTime ?? "N/A";
-  const fastestSelloutLabel = summary.fastestSelloutTime ?? "N/A";
+      : "—";
+  const avgSelloutLabel = summary.avgSelloutTime ?? "—";
+  const fastestSelloutLabel = summary.fastestSelloutTime ?? "—";
 
   // Pour la flèche / couleur du header, on compare le dernier drop au précédent
   const lastDrop = drops[0];
@@ -389,14 +389,14 @@ export default function DropsHistoryPage() {
       ? `${headerRevenueTrend >= 0 ? "↑" : "↓"} ${Math.abs(
           headerRevenueTrend
         ).toFixed(0)}%`
-      : "N/A";
+      : "—";
 
   const convTrendLabel =
     headerConvTrend != null
       ? `${headerConvTrend >= 0 ? "↑" : "↓"} ${Math.abs(
           headerConvTrend
         ).toFixed(1)}%`
-      : "N/A";
+      : "—";
 
   const revenueTrendColor =
     headerRevenueTrend == null
@@ -420,7 +420,44 @@ export default function DropsHistoryPage() {
       }}
     >
 
-      {/* KPI cards */}
+      {/* KPI cards — hidden until a drop has actually completed: an
+          all-zero row at install reads as "broken", not "new" (VAULTD-DESIGN.md §5) */}
+      {summary.dropsCompleted === 0 ? (
+        <div
+          style={{
+            background: "#ffffff",
+            border: "1px solid #e3e3e3",
+            borderRadius: 10,
+            padding: "32px 24px",
+            textAlign: "center",
+            marginBottom: 20,
+          }}
+        >
+          <div style={{ fontSize: 15, fontWeight: 700, color: "var(--vaultd-accent, #1a1a1a)", marginBottom: 6 }}>
+            No completed drops yet
+          </div>
+          <p style={{ fontSize: 13, color: "#6d7175", margin: "0 auto 16px", maxWidth: 420 }}>
+            Once a drop ends, its revenue, conversion rate and sell-out time will show up here.
+          </p>
+          <Link to="/app/drops">
+            <button
+              type="button"
+              style={{
+                background: "var(--vaultd-accent, #1a1a1a)",
+                color: "#ffffff",
+                border: "none",
+                padding: "8px 16px",
+                borderRadius: 8,
+                fontSize: 13,
+                fontWeight: 500,
+                cursor: "pointer",
+              }}
+            >
+              View active drops
+            </button>
+          </Link>
+        </div>
+      ) : (
       <div
         style={{
           display: "grid",
@@ -457,6 +494,7 @@ export default function DropsHistoryPage() {
               fontWeight: 800,
               color: "#1a1a1a",
               letterSpacing: -0.8,
+              ...monoNumberStyle,
             }}
           >
             {totalRevenueLabel}
@@ -514,6 +552,7 @@ export default function DropsHistoryPage() {
               fontWeight: 800,
               color: "#1a1a1a",
               letterSpacing: -0.8,
+              ...monoNumberStyle,
             }}
           >
             {summary.dropsCompleted}
@@ -561,6 +600,7 @@ export default function DropsHistoryPage() {
               fontWeight: 800,
               color: "#1a1a1a",
               letterSpacing: -0.8,
+              ...monoNumberStyle,
             }}
           >
             {avgConvLabel}
@@ -618,6 +658,7 @@ export default function DropsHistoryPage() {
               fontWeight: 800,
               color: "#1a1a1a",
               letterSpacing: -0.8,
+              ...monoNumberStyle,
             }}
           >
             {avgSelloutLabel}
@@ -633,6 +674,7 @@ export default function DropsHistoryPage() {
           </div>
         </div>
       </div>
+      )}
 
       {/* Barre de recherche + filtres */}
       <div
@@ -1156,6 +1198,7 @@ export default function DropsHistoryPage() {
                       style={{
                         fontSize: 12.5,
                         color: "#6d7175",
+                        ...monoNumberStyle,
                       }}
                     >
                       {drop.date} · {drop.startTime} – {drop.endTime}
@@ -1213,6 +1256,7 @@ export default function DropsHistoryPage() {
                       style={{
                         fontSize: 12.5,
                         color: "#6d7175",
+                        ...monoNumberStyle,
                       }}
                     >
                       {drop.duration} live
@@ -1265,6 +1309,7 @@ export default function DropsHistoryPage() {
                       fontWeight: 800,
                       color: "#1a1a1a",
                       letterSpacing: -0.4,
+                      ...monoNumberStyle,
                     }}
                   >
                     {drop.revenue}
@@ -1273,7 +1318,7 @@ export default function DropsHistoryPage() {
                     style={{
                       fontSize: 11,
                       color:
-                        drop.revenueDelta === "N/A (1st drop)"
+                        drop.revenueDelta === "1st drop"
                           ? "#b0b0b0"
                           : drop.revenueDelta === "—"
                           ? "#6d7175"
@@ -1320,6 +1365,7 @@ export default function DropsHistoryPage() {
                       fontWeight: 800,
                       color: "#1a1a1a",
                       letterSpacing: -0.4,
+                      ...monoNumberStyle,
                     }}
                   >
                     {drop.conversionRate}
@@ -1328,7 +1374,7 @@ export default function DropsHistoryPage() {
                     style={{
                       fontSize: 11,
                       color:
-                        drop.conversionDelta === "N/A"
+                        drop.conversionDelta === "1st drop"
                           ? "#b0b0b0"
                           : drop.conversionDelta === "—"
                           ? "#6d7175"
@@ -1375,6 +1421,7 @@ export default function DropsHistoryPage() {
                       fontWeight: 800,
                       color: "#1a1a1a",
                       letterSpacing: -0.4,
+                      ...monoNumberStyle,
                     }}
                   >
                     {drop.waitlistCount}
@@ -1383,6 +1430,7 @@ export default function DropsHistoryPage() {
                     style={{
                       fontSize: 11,
                       color: "#919191",
+                      ...monoNumberStyle,
                     }}
                   >
                     {drop.buyersCount} buyers

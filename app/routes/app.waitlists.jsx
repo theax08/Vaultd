@@ -8,11 +8,13 @@ import {
   pageHeaderTitleRowStyle,
   pageHeaderTitleStyle,
   GridIcon,
-  cardPadded,
   cardLabel,
-  pillBadge,
   secondaryButtonStyle,
   PlanLockedPage,
+  getDropDisplayStatus,
+  StatusPill,
+  dropCardClassName,
+  monoNumberStyle,
 } from "../styles/pop-ui";
 import { getAccountForShop } from "../vaultd-account.server";
 import { PLAN_ORDER } from "../vaultd-plans";
@@ -90,6 +92,7 @@ export const loader = async ({ request }) => {
       dropId: drop.id,
       dropName: drop.name,
       status: drop.status,
+      autoLaunch: drop.autoLaunch,
       startTime: drop.startTime,
       waitlistSize: entries.length,
       totalWaitlistSize: drop.waitlistEntries.length,
@@ -313,35 +316,35 @@ export default function WaitlistsPage() {
               <p style={{ fontSize: 13.5, color: "#6d7175" }}>No waitlist matches your search/filters.</p>
             ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            {visibleWaitlists.map((item) => (
-              <div key={item.dropId} style={cardPadded}>
+            {visibleWaitlists.map((item) => {
+              const displayStatus = getDropDisplayStatus(item);
+              return (
+              <div key={item.dropId} className={dropCardClassName(displayStatus)} style={{ padding: "16px 18px" }}>
                 {/* CARD HEADER: Informations sur le Drop */}
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
                   <span style={{ fontSize: 15, fontWeight: 700, color: "var(--vaultd-accent, #1a1a1a)" }}>{item.dropName}</span>
-                  <span style={pillBadge(item.status === "LIVE" ? "success" : "neutral")}>
-                    {item.status}
-                  </span>
+                  <StatusPill status={displayStatus} />
                 </div>
                 <p style={{ fontSize: 12.5, color: "#6d7175", margin: "0 0 12px 0" }}>
                   {item.startTime
-                    ? `Starts at: ${new Date(item.startTime).toLocaleString()}`
+                    ? <>Starts at: <span style={monoNumberStyle}>{new Date(item.startTime).toLocaleString()}</span></>
                     : "Start time: Not set"}
                 </p>
 
                 {/* CARD BODY: Taille globale */}
                 <p style={{ fontSize: 13.5, color: "#303030", margin: "0 0 12px 0" }}>
                   <strong style={{ color: "#1a1a1a" }}>Active:</strong>{" "}
-                  {item.waitlistSize}{" "}
+                  <span style={monoNumberStyle}>{item.waitlistSize}</span>{" "}
                   {item.waitlistSize === 1 ? "customer" : "customers"} waiting
                   {item.unsubscribedCount > 0 && (
                     <>
                       {" · "}
                       <span style={{ color: "#6d7175" }}>
-                        {item.unsubscribedCount} unsubscribed
+                        <span style={monoNumberStyle}>{item.unsubscribedCount}</span> unsubscribed
                       </span>
                       {" · "}
                       <span style={{ color: "#6d7175" }}>
-                        {item.totalWaitlistSize} total ever joined
+                        <span style={monoNumberStyle}>{item.totalWaitlistSize}</span> total ever joined
                       </span>
                     </>
                   )}
@@ -397,6 +400,7 @@ export default function WaitlistsPage() {
                                     <td
                                       style={{
                                         ...tableCellStyle,
+                                        ...monoNumberStyle,
                                         fontWeight: "bold",
                                         color: "#007a5a",
                                       }}
@@ -407,6 +411,7 @@ export default function WaitlistsPage() {
                                     <td
                                       style={{
                                         ...tableCellStyle,
+                                        ...monoNumberStyle,
                                         color: "#6D7175",
                                       }}
                                     >
@@ -524,10 +529,10 @@ export default function WaitlistsPage() {
                             {item.unsubscribed.map((entry) => (
                               <tr key={entry.id} style={tableRowStyle}>
                                 <td style={tableCellStyle}>{entry.email}</td>
-                                <td style={{ ...tableCellStyle, color: "#6D7175" }}>
+                                <td style={{ ...tableCellStyle, ...monoNumberStyle, color: "#6D7175" }}>
                                   {new Date(entry.createdAt).toLocaleDateString()}
                                 </td>
-                                <td style={{ ...tableCellStyle, color: "#6D7175" }}>
+                                <td style={{ ...tableCellStyle, ...monoNumberStyle, color: "#6D7175" }}>
                                   {new Date(entry.unsubscribedAt).toLocaleDateString()}
                                 </td>
                               </tr>
@@ -539,7 +544,8 @@ export default function WaitlistsPage() {
                   </div>
                 )}
               </div>
-            ))}
+              );
+            })}
             </div>
             )}
           </>

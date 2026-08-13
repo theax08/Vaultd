@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { getActivePresenceCount } from "../presence.server";
 import { getAccountForShop } from "../vaultd-account.server";
 import { PLAN_ORDER } from "../vaultd-plans";
-import { PlanLockedPage } from "../styles/pop-ui";
+import { PlanLockedPage, monoNumberStyle } from "../styles/pop-ui";
 
 // ===============================
 // SERVER: loader – KPIs branchés DB
@@ -1271,6 +1271,7 @@ function KpiCard({
           alignItems: "baseline",
           gap: 6,
           color: valueColor,
+          ...monoNumberStyle,
         }}
       >
         {valuePrefix && (
@@ -1339,7 +1340,7 @@ function StockProgressBoard({ drop }) {
         <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#6b7280" }}>
           Stock progress
         </div>
-        <div style={{ fontSize: 11, color: "#6b7280" }}>
+        <div style={{ fontSize: 11, color: "#6b7280", ...monoNumberStyle }}>
           {sold}/{total} sold
         </div>
       </div>
@@ -1354,7 +1355,7 @@ function StockProgressBoard({ drop }) {
           }}
         />
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, marginBottom: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, marginBottom: 12, ...monoNumberStyle }}>
         <span style={{ fontSize: 10.5, color: "#9ca3af" }}>0</span>
         <span style={{ fontSize: 11, fontWeight: 700, color: "#fb7185" }}>{pct}% gone</span>
         <span style={{ fontSize: 10.5, color: "#9ca3af" }}>{total}</span>

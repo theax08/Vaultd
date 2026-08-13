@@ -7,8 +7,10 @@ import {
   pagePopStyle,
   cardPadded,
   cardLabel,
-  pillBadge,
   primaryButtonStyle,
+  getDropDisplayStatus,
+  StatusPill,
+  monoNumberStyle,
 } from "../styles/pop-ui";
 
 export const loader = async ({ request }) => {
@@ -80,7 +82,7 @@ export const loader = async ({ request }) => {
         where: { shopDomain },
         orderBy: { createdAt: "desc" },
         take: 30,
-        select: { id: true, name: true, status: true, createdAt: true },
+        select: { id: true, name: true, status: true, createdAt: true, autoLaunch: true, startTime: true },
       }),
     ]);
   } catch {}
@@ -109,6 +111,7 @@ export const loader = async ({ request }) => {
       completedThisMonthCount,
       avgConvRate,
       activeWaitlistMembers,
+      hasCompletedDrops: endedDrops.length > 0,
     },
     steps,
     recentDrops,
@@ -117,11 +120,6 @@ export const loader = async ({ request }) => {
     hasNewFeatures: account ? account.lastSeenPlan !== account.plan : false,
   };
 };
-
-function StatusBadge({ status }) {
-  const tone = status === "LIVE" ? "success" : status === "ENDED" ? "neutral" : "warning";
-  return <span style={pillBadge(tone)}>{status}</span>;
-}
 
 const NAV_LINKS = [
   { to: "/app/drops", label: "Drops" },
@@ -143,37 +141,52 @@ export default function Dashboard() {
   return (
     <div style={pagePopStyle}>
 
-      {/* KPI cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 14, marginBottom: 16 }}>
-        <div style={{ ...cardPadded, borderTop: "3px solid var(--vaultd-accent, #1a1a1a)" }}>
-          <div style={cardLabel}>TOTAL REVENUE</div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: "#1a1a1a" }}>
-            ${stats.totalRevenue.toLocaleString("en-US")}
+      {/* KPI cards — hidden until a drop has actually completed: an
+          all-zero row at install reads as "broken", not "new" (VAULTD-DESIGN.md §5) */}
+      {stats.hasCompletedDrops ? (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 14, marginBottom: 16 }}>
+          <div style={{ ...cardPadded, borderTop: "3px solid var(--vaultd-accent, #1a1a1a)" }}>
+            <div style={cardLabel}>TOTAL REVENUE</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: "#1a1a1a", ...monoNumberStyle }}>
+              ${stats.totalRevenue.toLocaleString("en-US")}
+            </div>
+            <div style={{ fontSize: 11.5, color: "#919191" }}>All drops combined</div>
           </div>
-          <div style={{ fontSize: 11.5, color: "#919191" }}>All drops combined</div>
-        </div>
-        <div style={{ ...cardPadded, borderTop: "3px solid var(--vaultd-accent, #1a1a1a)" }}>
-          <div style={cardLabel}>DROPS COMPLETED</div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: "#1a1a1a" }}>
-            {stats.completedThisMonthCount}
+          <div style={{ ...cardPadded, borderTop: "3px solid var(--vaultd-accent, #1a1a1a)" }}>
+            <div style={cardLabel}>DROPS COMPLETED</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: "#1a1a1a", ...monoNumberStyle }}>
+              {stats.completedThisMonthCount}
+            </div>
+            <div style={{ fontSize: 11.5, color: "#919191" }}>This month</div>
           </div>
-          <div style={{ fontSize: 11.5, color: "#919191" }}>This month</div>
-        </div>
-        <div style={{ ...cardPadded, borderTop: "3px solid var(--vaultd-accent, #1a1a1a)" }}>
-          <div style={cardLabel}>AVG CONV RATE</div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: "#1a1a1a" }}>
-            {stats.avgConvRate != null ? `${stats.avgConvRate.toFixed(1)}%` : "—"}
+          <div style={{ ...cardPadded, borderTop: "3px solid var(--vaultd-accent, #1a1a1a)" }}>
+            <div style={cardLabel}>AVG CONV RATE</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: "#1a1a1a", ...monoNumberStyle }}>
+              {stats.avgConvRate != null ? `${stats.avgConvRate.toFixed(1)}%` : "—"}
+            </div>
+            <div style={{ fontSize: 11.5, color: "#919191" }}>Across all drops</div>
           </div>
-          <div style={{ fontSize: 11.5, color: "#919191" }}>Across all drops</div>
-        </div>
-        <div style={{ ...cardPadded, borderTop: "3px solid var(--vaultd-accent, #1a1a1a)" }}>
-          <div style={cardLabel}>ACTIVE WAITLIST MEMBERS</div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: "#1a1a1a" }}>
-            {stats.activeWaitlistMembers}
+          <div style={{ ...cardPadded, borderTop: "3px solid var(--vaultd-accent, #1a1a1a)" }}>
+            <div style={cardLabel}>ACTIVE WAITLIST MEMBERS</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: "#1a1a1a", ...monoNumberStyle }}>
+              {stats.activeWaitlistMembers}
+            </div>
+            <div style={{ fontSize: 11.5, color: "#919191" }}>Across open drops</div>
           </div>
-          <div style={{ fontSize: 11.5, color: "#919191" }}>Across open drops</div>
         </div>
-      </div>
+      ) : (
+        <div style={{ ...cardPadded, textAlign: "center", padding: "32px 24px", marginBottom: 16 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: "var(--vaultd-accent, #1a1a1a)", marginBottom: 6 }}>
+            Launch your first drop
+          </div>
+          <p style={{ fontSize: 13, color: "#6d7175", margin: "0 auto 16px", maxWidth: 420 }}>
+            Schedule a date, connect your products, and Vaultd handles the queue and the emails. Revenue and conversion metrics will show up here once it sells.
+          </p>
+          <Link to="/app/drops?new=1">
+            <button type="button" style={primaryButtonStyle}>Create drop</button>
+          </Link>
+        </div>
+      )}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 14, alignItems: "start" }}>
         {/* Recent drops — spans 3 of 4 columns */}
@@ -213,9 +226,9 @@ export default function Dashboard() {
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <span style={{ fontSize: 13.5, fontWeight: 600, color: "#1a1a1a" }}>{drop.name}</span>
-                    <StatusBadge status={drop.status} />
+                    <StatusPill status={getDropDisplayStatus(drop)} />
                   </div>
-                  <span style={{ fontSize: 12, color: "#919191" }}>
+                  <span style={{ fontSize: 12, color: "#919191", ...monoNumberStyle }}>
                     {new Date(drop.createdAt).toLocaleDateString("en-US")}
                   </span>
                 </div>

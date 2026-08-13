@@ -17,8 +17,6 @@ import {
   pageHeaderTitleRowStyle,
   pageHeaderTitleStyle,
   GridIcon,
-  cardPadded,
-  pillBadge,
   primaryButtonStyle,
   primaryButtonDisabledStyle,
   secondaryButtonStyle,
@@ -28,6 +26,10 @@ import {
   modalOverlayStyle,
   modalCardStyle,
   PlanLockedPage,
+  getDropDisplayStatus,
+  StatusPill,
+  dropCardClassName,
+  monoNumberStyle,
 } from "../styles/pop-ui";
 import { getAccountForShop } from "../vaultd-account.server";
 import { PLAN_LIMITS, PLAN_FEATURES, PLAN_ORDER } from "../vaultd-plans";
@@ -827,8 +829,10 @@ export default function DropsPage() {
           </p>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            {drops.map((drop) => (
-              <div key={drop.id} style={cardPadded}>
+            {drops.map((drop) => {
+              const displayStatus = getDropDisplayStatus(drop);
+              return (
+              <div key={drop.id} className={dropCardClassName(displayStatus)} style={{ padding: "16px 18px" }}>
                 <div
                   style={{
                     display: "flex",
@@ -844,17 +848,7 @@ export default function DropsPage() {
                       <span style={{ fontSize: 15, fontWeight: 700, color: "var(--vaultd-accent, #1a1a1a)" }}>
                         {drop.name}
                       </span>
-                      <span
-                        style={pillBadge(
-                          drop.status === "LIVE"
-                            ? "success"
-                            : drop.status === "ENDED"
-                            ? "neutral"
-                            : "warning"
-                        )}
-                      >
-                        {drop.status}
-                      </span>
+                      <StatusPill status={displayStatus} />
                     </div>
                   </div>
 
@@ -868,7 +862,7 @@ export default function DropsPage() {
                   >
                     {drop.externalId ? (
                       <>
-                        <span style={{ fontSize: 12, color: "#6d7175" }}>
+                        <span style={{ fontSize: 12, color: "#6d7175", ...monoNumberStyle }}>
                           ID: {drop.externalId}
                         </span>
                         <button
@@ -896,9 +890,11 @@ export default function DropsPage() {
 
                 <p style={{ fontSize: 13, color: "#303030", margin: "0 0 4px 0" }}>
                   <strong style={{ color: "#1a1a1a" }}>Start time: </strong>
-                  {drop.startTime
-                    ? new Date(drop.startTime).toLocaleString("en-US")
-                    : "Not set"}
+                  <span style={monoNumberStyle}>
+                    {drop.startTime
+                      ? new Date(drop.startTime).toLocaleString("en-US")
+                      : "Not set"}
+                  </span>
                 </p>
                 <p style={{ fontSize: 13, color: "#303030", margin: "0 0 12px 0" }}>
                   <strong style={{ color: "#1a1a1a" }}>Description: </strong>
@@ -968,7 +964,8 @@ export default function DropsPage() {
                   )}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
 

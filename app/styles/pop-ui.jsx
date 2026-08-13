@@ -140,6 +140,54 @@ export function pillBadge(tone = "neutral") {
   };
 }
 
+// Le seul systeme de couleur autorise dans l'app (VAULTD-DESIGN.md) : l'etat
+// d'un drop. La DB ne connait que DRAFT/LIVE/ENDED — "scheduled" est un
+// sous-etat purement visuel (DRAFT + autoLaunch + startTime futur), derive
+// ici sans toucher au champ status reel ni a la logique d'auto-launch.
+export function getDropDisplayStatus(drop) {
+  if (!drop) return "draft";
+  if (drop.status === "LIVE") return "live";
+  if (drop.status === "ENDED") return "ended";
+  if (drop.autoLaunch && drop.startTime && new Date(drop.startTime) > new Date()) {
+    return "scheduled";
+  }
+  return "draft";
+}
+
+const DROP_STATUS_LABELS = {
+  draft: "Draft",
+  scheduled: "Scheduled",
+  live: "Live",
+  ended: "Ended",
+};
+
+// Pastille d'etat — section 4 de VAULTD-DESIGN.md. S'appuie sur les classes
+// .vd-pill/.vd-dot injectees via GLOBAL_POP_CSS (le pouls du point "live"
+// est une @keyframes, impossible a exprimer en style inline).
+export function StatusPill({ status, label }) {
+  return (
+    <span className={`vd-pill vd-pill--${status}`}>
+      <span className="vd-dot" />
+      {label ?? DROP_STATUS_LABELS[status] ?? status}
+    </span>
+  );
+}
+
+// Ligne/carte de drop — meme logique de classes que StatusPill, pour le
+// listere de 3px sur le bord gauche (section 4 : un ::before, pas un
+// border-left, pour ne pas casser le border-radius des autres cotes).
+export function dropCardClassName(status, extraClassName = "") {
+  return ["vd-drop", `vd-drop--${status}`, extraClassName].filter(Boolean).join(" ");
+}
+
+// Chasse fixe tabulaire pour tout ce qui est chiffre (section 3 de
+// VAULTD-DESIGN.md) : revenus, stocks, compteurs de file, comptes a rebours,
+// pourcentages, durees, IDs de drop, dates numeriques.
+export const monoNumberStyle = {
+  fontFamily: "var(--vd-mono)",
+  fontVariantNumeric: "tabular-nums",
+};
+
 export const primaryButtonStyle = {
   background: "var(--vaultd-accent, #1a1a1a)",
   color: "#ffffff",
@@ -285,6 +333,51 @@ export const GLOBAL_POP_CSS = `
     box-shadow: 0 0 0px 1000px #ffffff inset;
     transition: background-color 5000s ease-in-out 0s;
   }
+
+  /* VAULTD-DESIGN.md section 4 — pastille d'etat + ligne de drop. Le seul
+     systeme de couleur autorise dans l'app : l'etat d'un drop. */
+  .vd-pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase;
+    padding: 3px 9px 3px 7px; border-radius: 5px;
+  }
+  .vd-dot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
+
+  .vd-pill--draft { background: var(--vd-draft-bg); color: var(--vd-draft-fg); }
+  .vd-pill--draft .vd-dot { background: transparent; box-shadow: inset 0 0 0 1.5px var(--vd-draft); }
+
+  .vd-pill--scheduled { background: var(--vd-sched-bg); color: var(--vd-sched-fg); }
+  .vd-pill--scheduled .vd-dot { background: var(--vd-sched); }
+
+  .vd-pill--live { background: var(--vd-live-bg); color: var(--vd-live-fg); }
+  .vd-pill--live .vd-dot { background: var(--vd-live); animation: vd-pulse 1.7s ease-in-out infinite; }
+
+  .vd-pill--ended { background: var(--vd-ended-bg); color: var(--vd-ended-fg); }
+  .vd-pill--ended .vd-dot { background: var(--vd-ended); }
+
+  @keyframes vd-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: .35; transform: scale(.8); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .vd-pill--live .vd-dot { animation: none; }
+  }
+
+  .vd-drop {
+    position: relative; overflow: hidden;
+    background: var(--vd-card); border: 0;
+    border-radius: var(--vd-radius);
+    box-shadow: var(--vd-ring);
+    transition: box-shadow .15s ease;
+  }
+  .vd-drop:hover { box-shadow: var(--vd-ring-hover); }
+  .vd-drop::before {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  }
+  .vd-drop--draft::before     { background: var(--vd-draft); }
+  .vd-drop--scheduled::before { background: var(--vd-sched); }
+  .vd-drop--live::before      { background: var(--vd-live); }
+  .vd-drop--ended::before     { background: var(--vd-ended); }
 `;
 
 export const successBannerStyle = {
