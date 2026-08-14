@@ -267,13 +267,13 @@ export const action = async ({ request }) => {
     const to = formData.get("to")?.toString().trim() || "";
 
     if (!dropName) {
-      return { intent, error: "Choose a preview drop before sending a test." };
+      return { intent, type, error: "Choose a preview drop before sending a test." };
     }
     if (!to || !/^\S+@\S+\.\S+$/.test(to)) {
-      return { intent, error: "Enter a valid email address to send the test to." };
+      return { intent, type, error: "Enter a valid email address to send the test to." };
     }
     if (isTestSendRateLimited(shopDomain)) {
-      return { intent, error: "Too many test emails sent — wait a minute and try again." };
+      return { intent, type, error: "Too many test emails sent — wait a minute and try again." };
     }
 
     const [emailAutomations, { buildLogoUrl }] = await Promise.all([
@@ -321,15 +321,16 @@ export const action = async ({ request }) => {
           nextDropCtaUrl: ctaUrl,
         });
       } else {
-        return { intent, error: "Unknown email type." };
+        return { intent, type, error: "Unknown email type." };
       }
     } catch (err) {
-      console.error("[emails] SEND_TEST failed:", err);
-      return { intent, error: "Could not send the test email. Try again in a moment." };
+      console.error("[emails] SEND_TEST failed for", type, "to", to, ":", err);
+      return { intent, type, error: "Could not send the test email. Try again in a moment." };
     }
 
     recordTestSend(shopDomain);
-    return { intent, success: true, to };
+    console.log("[emails] SEND_TEST sent", type, "to", to);
+    return { intent, type, success: true, to };
   }
 
   // Rendu HTML reel (email-templates.js) pour l'apercu — les memes fonctions
@@ -872,6 +873,7 @@ export default function EmailsPage() {
                           canSendTest={canSendTest}
                           testEmail={testEmail}
                           onTestEmailChange={setTestEmail}
+                          testResult={testFetcher.data?.type === type ? testFetcher.data : null}
                         />
                       ) : (
                         <button
@@ -1071,7 +1073,17 @@ function BrandBar({
  * Panneau d'aperçu permanent — rendu HTML reel (email-templates.js), pas une
  * reconstitution maison : ne peut donc pas diverger de ce qui part vraiment.
  */
+function MagnifyIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="6" cy="6" r="4.3" stroke="currentColor" strokeWidth="1.4" />
+      <line x1="9.4" y1="9.4" x2="13" y2="13" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function PreviewPanel({ subject, html, isLoading, previewMode, setPreviewMode }) {
+  const [isZoomed, setIsZoomed] = useState(false);
   const PANEL_W = 300;
   const frameW = previewMode === "mobile" ? 375 : 640;
   const frameH = 900;
@@ -1124,9 +1136,9 @@ function PreviewPanel({ subject, html, isLoading, previewMode, setPreviewMode })
 
       <div
         style={{
+          position: "relative",
           width: PANEL_W,
           height: frameH * scale,
-          overflow: "hidden",
           borderRadius: 8,
           boxShadow: "var(--vd-ring, 0 0 0 1px rgba(20,24,31,.07))",
           background: "#ffffff",
@@ -1134,15 +1146,102 @@ function PreviewPanel({ subject, html, isLoading, previewMode, setPreviewMode })
           transition: "opacity .1s ease",
         }}
       >
+        <div style={{ width: "100%", height: "100%", overflow: "hidden", borderRadius: 8 }}>
+          {html && (
+            <iframe
+              srcDoc={html}
+              title="Email preview"
+              sandbox=""
+              style={{ width: frameW, height: frameH, border: "none", transform: `scale(${scale})`, transformOrigin: "top left" }}
+            />
+          )}
+        </div>
         {html && (
-          <iframe
-            srcDoc={html}
-            title="Email preview"
-            sandbox=""
-            style={{ width: frameW, height: frameH, border: "none", transform: `scale(${scale})`, transformOrigin: "top left" }}
-          />
+          <button
+            type="button"
+            onClick={() => setIsZoomed(true)}
+            title="View larger"
+            style={{
+              position: "absolute",
+              top: 8,
+              right: 8,
+              width: 26,
+              height: 26,
+              borderRadius: "50%",
+              background: "rgba(255,255,255,0.92)",
+              border: "1px solid var(--vd-hairline, #e3e3e3)",
+              boxShadow: "var(--vd-ring)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#6d7175",
+              cursor: "pointer",
+            }}
+          >
+            <MagnifyIcon />
+          </button>
         )}
       </div>
+
+      {isZoomed && (
+        <div
+          onClick={() => setIsZoomed(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(20,24,31,0.7)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 2000,
+            padding: 32,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "#ffffff",
+              borderRadius: 12,
+              overflow: "hidden",
+              maxHeight: "90vh",
+              maxWidth: "92vw",
+              boxShadow: "0 20px 60px rgba(0,0,0,0.35)",
+              position: "relative",
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setIsZoomed(false)}
+              aria-label="Close"
+              style={{
+                position: "absolute",
+                top: 10,
+                right: 10,
+                width: 30,
+                height: 30,
+                borderRadius: "50%",
+                background: "#ffffff",
+                border: "1px solid var(--vd-hairline, #e3e3e3)",
+                boxShadow: "var(--vd-ring)",
+                fontSize: 15,
+                color: "#6d7175",
+                cursor: "pointer",
+                zIndex: 1,
+              }}
+            >
+              ✕
+            </button>
+            <div style={{ overflowY: "auto", maxHeight: "90vh" }}>
+              <iframe
+                srcDoc={html}
+                title="Email preview — large"
+                sandbox=""
+                style={{ width: frameW, maxWidth: "100%", height: 1300, border: "none", display: "block" }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1169,6 +1268,7 @@ function AutomationEditor({
   canSendTest,
   testEmail,
   onTestEmailChange,
+  testResult,
 }) {
   const activeFieldRef = useRef(null); // ref vers le <input>/<textarea> actuellement focus
 
@@ -1322,6 +1422,16 @@ function AutomationEditor({
           {!canSendTest && (
             <span style={{ fontSize: 11.5, color: "#919191" }}>
               Choose a preview drop above to send a test.
+            </span>
+          )}
+          {testResult?.success && (
+            <span style={{ fontSize: 11.5, color: "#007a5a", fontWeight: 600 }}>
+              ✓ Test sent to {testResult.to}
+            </span>
+          )}
+          {testResult?.error && (
+            <span style={{ fontSize: 11.5, color: "#c2410c", fontWeight: 600 }}>
+              {testResult.error}
             </span>
           )}
         </div>
