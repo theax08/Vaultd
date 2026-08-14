@@ -33,6 +33,7 @@ model VaultdAccount {
   lastSeenPlan    String    @default("FREE")
   appearanceColor String    @default("black")
   email           String?   @unique
+  emailVerifiedAt DateTime?
   passwordHash    String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt

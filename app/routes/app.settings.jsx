@@ -8,6 +8,7 @@ import {
   createLinkTicket,
   requestPasswordReset,
   resetPasswordWithCode,
+  resendVerificationEmail,
 } from "../vaultd-account.server";
 import { canUseColor, PLAN_SUMMARIES, COLOR_OPTIONS, PLAN_ORDER } from "../vaultd-plans";
 import {
@@ -189,6 +190,14 @@ export const action = async ({ request }) => {
     return { intent, success: true };
   }
 
+  if (intent === "resend_verification") {
+    const account = await getAccountForShop(shopDomain);
+    if (!account) return { intent, error: "Create your Vaultd account first." };
+    const result = await resendVerificationEmail(account.id);
+    if (result.error) return { intent, error: result.error };
+    return { intent, success: true };
+  }
+
   if (intent === "disconnect_account") {
     await db.shopSettings.update({
       where: { shopDomain },
@@ -235,9 +244,6 @@ export default function SettingsPage() {
   const [bpSecretKey, setBpSecretKey] = useState(botProtection.secretKey);
   const [isSavingBotProt, setIsSavingBotProt] = useState(false);
   const [showBpSecret, setShowBpSecret] = useState(false);
-  // Aperçu optimiste : reflete le clic immediatement, sans attendre le
-  // round-trip serveur de handleSetColor (VAULTD-DESIGN §14.2).
-  const [previewColorKey, setPreviewColorKey] = useState(account?.appearanceColor || "black");
 
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
@@ -307,7 +313,6 @@ export default function SettingsPage() {
   };
 
   const handleSetColor = (color) => {
-    setPreviewColorKey(color);
     submit({ intent: "set_appearance", color }, { method: "post" });
   };
 
@@ -369,7 +374,13 @@ export default function SettingsPage() {
           {actionData?.success && actionData.intent !== "request_password_reset" && !isRedirectingToLinkBilling && (
             <div style={{ marginBottom: 16 }}>
               <AutoDismissBanner
-                message={actionData.intent === "reset_password" ? "Password reset. You can log in with your new password." : "Saved."}
+                message={
+                  actionData.intent === "reset_password"
+                    ? "Password reset. You can log in with your new password."
+                    : actionData.intent === "resend_verification"
+                    ? "Confirmation email sent — check your inbox."
+                    : "Saved."
+                }
                 dismissKey={actionData}
               />
             </div>
@@ -551,6 +562,31 @@ export default function SettingsPage() {
                 {account.id}
               </span>
             </div>
+            {account.email && !account.emailVerifiedAt && (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  marginBottom: 14,
+                  padding: "8px 12px",
+                  background: "#fff3cd",
+                  border: "1px solid #ffc107",
+                  borderRadius: 8,
+                }}
+              >
+                <span style={{ fontSize: 12.5, color: "#7a5600" }}>
+                  {account.email} isn&apos;t confirmed yet. Check your inbox for the confirmation link.
+                </span>
+                <button
+                  type="button"
+                  onClick={() => submit({ intent: "resend_verification" }, { method: "post" })}
+                  style={{ background: "none", border: "none", padding: 0, fontSize: 12.5, fontWeight: 600, color: "#7a5600", textDecoration: "underline", cursor: "pointer", whiteSpace: "nowrap" }}
+                >
+                  Resend
+                </button>
+              </div>
+            )}
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
               <span style={{ fontSize: 13, color: "#6d7175" }}>Plan:</span>
               {plan ? (
@@ -715,31 +751,6 @@ export default function SettingsPage() {
           })}
         </div>
 
-        {/* Aperçu en direct — pour voir l'effet sans quitter la page
-            (VAULTD-DESIGN §14.2). L'accent ne touche que boutons/liens/focus/
-            graphiques : les pastilles d'etat de drop et les comptes a rebours
-            gardent toujours leurs propres tokens, jamais cette couleur. */}
-        {(() => {
-          const previewOpt = COLOR_OPTIONS.find((o) => o.key === previewColorKey) ?? COLOR_OPTIONS[0];
-          return (
-            <div style={{ marginTop: 18, paddingTop: 16, borderTop: "1px solid var(--vd-hairline, #e3e3e3)" }}>
-              <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--vd-ink-3, #8B93A0)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 8 }}>
-                Preview — not clickable
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                <span
-                  aria-hidden="true"
-                  style={{ ...primaryButtonStyle, background: previewOpt.hex, pointerEvents: "none", cursor: "default" }}
-                >
-                  Create drop
-                </span>
-                <span aria-hidden="true" style={{ color: previewOpt.hex, fontWeight: 600, fontSize: 13, pointerEvents: "none", cursor: "default" }}>
-                  View plans →
-                </span>
-              </div>
-            </div>
-          );
-        })()}
         </>
       )}
 

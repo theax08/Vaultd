@@ -178,7 +178,7 @@ function HomeTour({ onDismiss }) {
   const current = TOUR_STEPS[step];
 
   return (
-    <div style={{ ...cardPadded, marginTop: 16 }}>
+    <div style={{ ...cardPadded, flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--vd-ink-3, #8B93A0)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 8 }}>
@@ -372,9 +372,10 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 14, alignItems: "start" }}>
-        {/* Recent drops — spans 3 of 4 columns */}
-        <div style={{ ...cardPadded, gridColumn: "span 3", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 14, alignItems: "stretch" }}>
+        {/* Left column: Recent drops, then the tour right below it — spans 3 of 4 columns */}
+        <div style={{ gridColumn: "span 3", display: "flex", flexDirection: "column", gap: 14, overflow: "hidden" }}>
+        <div style={{ ...cardPadded, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
             <span style={{ fontSize: 14, fontWeight: 700, color: "var(--vaultd-accent, #1a1a1a)" }}>Recent drops</span>
             <Link to="/app/drops" style={{ fontSize: 13, fontWeight: 600, color: "var(--vaultd-accent, #1a1a1a)" }}>
@@ -419,6 +420,8 @@ export default function Dashboard() {
               ))}
             </div>
           )}
+        </div>
+        {tourVisible && <HomeTour onDismiss={dismissTour} />}
         </div>
 
         {/* Right column */}
@@ -510,8 +513,6 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
-
-      {tourVisible && <HomeTour onDismiss={dismissTour} />}
     </div>
   );
 }
