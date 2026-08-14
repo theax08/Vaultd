@@ -6,7 +6,7 @@ import {
 import { buildUnsubscribeUrl, buildLogoUrl } from "../unsubscribe.server";
 import { checkBotProtection } from "../bot-protection.server";
 import { getAccountForShop } from "../vaultd-account.server";
-import { PLAN_ORDER } from "../vaultd-plans";
+import { PLAN_ORDER, PLAN_FEATURES } from "../vaultd-plans";
 
 export const action = async ({ request }) => {
   try {
@@ -51,6 +51,14 @@ export const action = async ({ request }) => {
       return jsonError("This waitlist is not currently accepting signups", 403);
     }
 
+    // Le champ referralEnabled reste tel quel sur le Drop meme apres une
+    // retrogradation de plan (aucune migration ne va reecrire tous les
+    // drops existants) — on verifie donc le plan ACTUEL a chaque appel
+    // plutot que de faire confiance a cette valeur figee. Un marchand qui
+    // redescend sous PRO voit le parrainage se desactiver immediatement sur
+    // tous ses drops, sans avoir besoin de les rouvrir un par un.
+    const referralActive = Boolean(drop.referralEnabled) && (PLAN_FEATURES[account.plan] ?? []).includes("referral");
+
     // Honeypot / timing / rate-limit (toujours actifs) + Turnstile (si
     // active par le marchand). On reste volontairement vague dans la
     // reponse pour ne pas aider un bot a affiner son comportement.
@@ -81,7 +89,7 @@ export const action = async ({ request }) => {
 
     // Resoud le parrain (si un code de parrainage valide a ete fourni)
     let referrer = null;
-    if (drop.referralEnabled && referralCode) {
+    if (referralActive && referralCode) {
       referrer = await db.waitlistEntry.findFirst({
         where: { dropId: dbDropId, referralCode },
       });
@@ -113,7 +121,7 @@ export const action = async ({ request }) => {
     }
 
     // Recompense le parrain : +referralPointsPerShare points de score.
-    if (isNewEntry && referrer && drop.referralEnabled) {
+    if (isNewEntry && referrer && referralActive) {
       try {
         await db.waitlistEntry.update({
           where: { id: referrer.id },
@@ -222,7 +230,7 @@ export const action = async ({ request }) => {
       success: true,
       rank: position,
       isNewEntry,
-      referralCode: drop.referralEnabled ? entry.referralCode : null,
+      referralCode: referralActive ? entry.referralCode : null,
     });
   } catch (error) {
     console.error("waitlist: unhandled error", error);
