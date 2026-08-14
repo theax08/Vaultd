@@ -1,6 +1,8 @@
 import db from "./db.server";
 import { sendDropLiveEmail, sendDropEndedEmail } from "./email-automations.server";
 import { buildUnsubscribeUrl, buildLogoUrl } from "./unsubscribe.server";
+import { getAccountForShop } from "./vaultd-account.server";
+import { PLAN_FEATURES } from "./vaultd-plans";
 
 // Delai sans nouvelle vente apres sold-out avant de cloturer automatiquement
 // (couvre le cas ou le vendeur n'est pas present pendant son drop).
@@ -263,7 +265,24 @@ export async function autoEndSoldOutDrops(shopDomain) {
 
 // Point d'entree unique pour le polling (loaders admin ou cron externe) :
 // lance d'abord les drops programmes, puis cloture ceux qui sont sold-out.
+//
+// autoLaunch est enregistre sur le Drop au moment de sa creation/edition
+// (verifie contre le plan d'ALORS dans app.drops.jsx) mais rien ne le
+// re-verifie ensuite — un marchand qui redescend sous SCALE apres avoir
+// programme un auto-launch continuerait sinon a en beneficier gratuitement
+// indefiniment. Meme raisonnement que le parrainage dans api.waitlist.jsx :
+// on revalide le plan ACTUEL a chaque appel plutot que de faire confiance a
+// un flag fige.
 export async function runAutoDropLifecycle(shopDomain) {
+  let account = null;
+  try {
+    account = await getAccountForShop(shopDomain);
+  } catch {}
+  const hasAutoLaunch = (PLAN_FEATURES[account?.plan] ?? []).includes("automatic_launch");
+  if (!hasAutoLaunch) {
+    return { launched: [], ended: [] };
+  }
+
   const launched = await autoLaunchDueDrops(shopDomain);
   const ended = await autoEndSoldOutDrops(shopDomain);
   return { launched, ended };

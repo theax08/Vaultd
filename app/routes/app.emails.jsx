@@ -234,7 +234,10 @@ export const action = async ({ request }) => {
           logoUrl,
         };
         if (fields.id) {
-          return db.emailAutomation.update({ where: { id: fields.id }, data });
+          // updateMany + shopDomain dans le where (pas juste id) : fields.id
+          // vient du JSON soumis par le client, sans ca n'importe quel id
+          // d'automation d'une AUTRE boutique pourrait etre ecrase.
+          return db.emailAutomation.updateMany({ where: { id: fields.id, shopDomain }, data });
         }
         return db.emailAutomation.create({ data: { shopDomain, type, active: true, ...data } });
       })
@@ -252,11 +255,16 @@ export const action = async ({ request }) => {
     if (!id) return { intent, error: "Missing automation." };
 
     try {
-      const updated = await db.emailAutomation.update({
-        where: { id },
+      // updateMany + shopDomain dans le where (pas juste id) : meme raison
+      // que SAVE_TEMPLATE plus haut — id vient du client sans verification.
+      const result = await db.emailAutomation.updateMany({
+        where: { id, shopDomain },
         data: { active },
       });
-      return { intent, success: true, id, active: updated.active };
+      if (result.count === 0) {
+        return { intent, error: "Automation not found.", id, active: !active };
+      }
+      return { intent, success: true, id, active };
     } catch (err) {
       console.error("[emails] TOGGLE_ACTIVE failed:", err);
       // Renvoie l'etat d'avant pour que le client puisse annuler sa mise a
