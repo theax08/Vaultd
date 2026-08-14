@@ -301,7 +301,7 @@ export const action = async ({ request }) => {
       import("../unsubscribe.server"),
     ]);
 
-    const automation = id ? await db.emailAutomation.findUnique({ where: { id } }) : null;
+    const automation = id ? await db.emailAutomation.findFirst({ where: { id, shopDomain } }) : null;
     const boutiqueLogo = automation ? buildLogoUrl(automation) : "";
 
     const shared = {
