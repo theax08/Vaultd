@@ -3,7 +3,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
 import { authenticate } from "../shopify.server";
 import { getAccountForShop } from "../vaultd-account.server";
-import { COLOR_OPTIONS, PLAN_FEATURES } from "../vaultd-plans";
+import { COLOR_OPTIONS, PLAN_FEATURES, canUseColor } from "../vaultd-plans";
 import { hasUnreadOwnerReplies } from "../support.server";
 import { GLOBAL_POP_CSS } from "../styles/pop-ui";
 
@@ -27,9 +27,15 @@ export const loader = async ({ request }) => {
   const plan = account?.plan ?? null;
   const features = PLAN_FEATURES[plan] ?? [];
 
+  // appearanceColor stays on the account after a downgrade (nothing resets
+  // it), so a merchant who picked Blue on Pro then dropped to Growth would
+  // otherwise keep rendering a color they no longer pay for everywhere in
+  // the app. Re-check eligibility live instead of trusting the stored value.
+  const canRenderStoredColor = account?.appearanceColor && canUseColor(plan, account.appearanceColor);
+
   return {
     apiKey: process.env.SHOPIFY_API_KEY || "",
-    accentColor: ACCENT_HEX[account?.appearanceColor] || ACCENT_HEX.black,
+    accentColor: canRenderStoredColor ? ACCENT_HEX[account.appearanceColor] : ACCENT_HEX.black,
     features,
     hasSupportUnread,
   };

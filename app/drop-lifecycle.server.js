@@ -39,6 +39,15 @@ async function notifyWaitlist(drop, type) {
   });
   if (!automation || !automation.active) return;
 
+  // DROP_LIVE et DROP_ENDED sont des automations PRO+ ("automated_emails").
+  // app.emails.jsx cache leur editeur en dessous de PRO, mais SAVE_TEMPLATE
+  // cree quand meme les 4 lignes EmailAutomation (active:true par defaut)
+  // des la premiere sauvegarde de la page — meme pour juste changer le nom
+  // de marque. Sans ce check, un marchand GROWTH qui n'a jamais paye PRO
+  // recevait quand meme ces envois des qu'un drop passait live/se cloturait.
+  const account = await getAccountForShop(drop.shopDomain);
+  if (!(PLAN_FEATURES[account?.plan] ?? []).includes("automated_emails")) return;
+
   const entries = await db.waitlistEntry.findMany({
     where: { dropId: drop.id, unsubscribedAt: null },
     orderBy: [{ score: "desc" }, { createdAt: "asc" }],

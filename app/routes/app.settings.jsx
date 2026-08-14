@@ -181,6 +181,20 @@ export const action = async ({ request }) => {
   if (intent === "update_bot_protection") {
     const db = (await import("../db.server")).default;
     const botProtectionEnabled = formData.get("botProtectionEnabled") === "on";
+
+    // Le toggle est cache derriere isElite cote client, mais rien ne
+    // l'appliquait cote serveur — un POST direct pouvait activer Turnstile
+    // sans jamais avoir ete Elite. On bloque uniquement l'ACTIVATION ;
+    // desactiver reste toujours permis (ex: apres une retrogradation, pour
+    // ne pas coincer un marchand avec une case a cocher qu'il ne peut plus
+    // decocher).
+    if (botProtectionEnabled) {
+      const account = await getAccountForShop(shopDomain);
+      if (account?.plan !== "ELITE") {
+        return { intent, error: "Bot protection requires the Elite plan." };
+      }
+    }
+
     const turnstileSiteKey = (formData.get("turnstileSiteKey") || "").toString().trim();
     const turnstileSecretKey = (formData.get("turnstileSecretKey") || "").toString().trim();
     await db.shopSettings.upsert({

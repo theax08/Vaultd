@@ -59,6 +59,14 @@ export const action = async ({ request }) => {
     // tous ses drops, sans avoir besoin de les rouvrir un par un.
     const referralActive = Boolean(drop.referralEnabled) && (PLAN_FEATURES[account.plan] ?? []).includes("referral");
 
+    // WAITLIST_RANK_UPDATE est une automation PRO+ ("automated_emails") —
+    // WAITLIST_CONFIRMATION est deja couverte par le check "plan actif"
+    // ci-dessus (GROWTH suffit), mais rank_update a besoin de PRO+ en plus.
+    // Sans ce check, la ligne EmailAutomation cree par defaut (active:true)
+    // des la premiere sauvegarde de la page Emails l'envoyait aussi pour un
+    // marchand GROWTH qui n'a jamais paye PRO.
+    const rankUpdateFeatureActive = (PLAN_FEATURES[account.plan] ?? []).includes("automated_emails");
+
     // Honeypot / timing / rate-limit (toujours actifs) + Turnstile (si
     // active par le marchand). On reste volontairement vague dans la
     // reponse pour ne pas aider un bot a affiner son comportement.
@@ -163,7 +171,7 @@ export const action = async ({ request }) => {
         }
 
         const movedUp = previousPosition != null && currentPosition < previousPosition;
-        if (movedUp && rankUpdateAutomation && rankUpdateAutomation.active && e.email) {
+        if (movedUp && rankUpdateAutomation && rankUpdateAutomation.active && rankUpdateFeatureActive && e.email) {
           try {
             await sendWaitlistRankUpdateEmail({
               to: e.email,
