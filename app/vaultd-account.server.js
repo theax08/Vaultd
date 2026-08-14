@@ -127,6 +127,13 @@ export async function deleteAccount(accountId) {
 // (see verifyAccountCredentials + createLinkTicket). A collision is reported
 // as an error so the merchant is pointed at that paid flow instead.
 export async function createAccountForShop(shopDomain, { email, password } = {}) {
+  // Une boutique deja liee qui recree un compte s'orphelinerait silencieusement
+  // de son compte (potentiellement payant) actuel sans avertissement.
+  const existingLink = await db.shopSettings.findUnique({ where: { shopDomain } });
+  if (existingLink?.vaultdAccountId) {
+    return { error: "This store is already linked to a Vaultd account. Disconnect it first if you want to create a new one." };
+  }
+
   let passwordHash;
   if (password) {
     const passwordError = validatePassword(password);
@@ -149,7 +156,7 @@ export async function createAccountForShop(shopDomain, { email, password } = {})
   }
 
   const account = await db.vaultdAccount.create({
-    data: { email: email || null, passwordHash },
+    data: { email: email || null, passwordHash, primaryShopDomain: shopDomain },
   });
   await db.shopSettings.upsert({
     where: { shopDomain },

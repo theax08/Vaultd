@@ -68,7 +68,9 @@ export const loader = async ({ request }) => {
     appHandle = data?.app?.handle ?? null;
   } catch {}
 
-  return { account, shop: session.shop, shopifyAdminBase, appHandle };
+  const isPrimaryShop = !account?.primaryShopDomain || account.primaryShopDomain === session.shop;
+
+  return { account, shop: session.shop, shopifyAdminBase, appHandle, isPrimaryShop };
 };
 
 async function isDevStore(admin) {
@@ -93,6 +95,15 @@ export const action = async ({ request }) => {
 
   if (intent === "cancel_subscription") {
     try {
+      const { getAccountForShop: getAccountForCancelCheck } = await import("../vaultd-account.server");
+      const accountForCheck = await getAccountForCancelCheck(shopDomain);
+      if (accountForCheck?.primaryShopDomain && accountForCheck.primaryShopDomain !== shopDomain) {
+        return {
+          success: false,
+          error: "This store shares a plan with another store. Cancel it from the primary store instead — or disconnect this store from the account in Settings.",
+        };
+      }
+
       const res = await admin.graphql(`{
         currentAppInstallation { activeSubscriptions { id name status } }
       }`);
@@ -138,7 +149,7 @@ export const action = async ({ request }) => {
 };
 
 export default function PlansPage() {
-  const { account, shop, shopifyAdminBase, appHandle } = useLoaderData();
+  const { account, shop, shopifyAdminBase, appHandle, isPrimaryShop } = useLoaderData();
 
   const getBillingHref = (plan) => {
     if (shopifyAdminBase && appHandle) {
@@ -204,9 +215,15 @@ export default function PlansPage() {
         </div>
       )}
 
-      {!currentPlan && (
+      {!currentPlan && isPrimaryShop && (
         <div style={{ marginBottom: 16, padding: "12px 16px", background: "#fff3cd", borderRadius: 8, border: "1px solid #ffc107", fontSize: 13.5, color: "#303030" }}>
           <strong>No active plan.</strong> Select a plan below to access Vaultd.
+        </div>
+      )}
+
+      {!isPrimaryShop && (
+        <div style={{ marginBottom: 16, padding: "12px 16px", background: "var(--vd-subtle, #F5F6F7)", borderRadius: 8, fontSize: 13.5, color: "#303030" }}>
+          <strong>This store shares a plan with another store.</strong> Plan changes can only be made from the primary store. To leave that shared account, use Settings → Account → Disconnect.
         </div>
       )}
 
@@ -256,12 +273,16 @@ export default function PlansPage() {
                 <button type="button" disabled style={secondaryButtonStyle}>
                   Current plan
                 </button>
-              ) : (
+              ) : isPrimaryShop ? (
                 <button
                   type="button"
                   style={primaryButtonStyle}
                   onClick={() => { window.top.location.href = getBillingHref(plan); }}
                 >
+                  Switch to this plan
+                </button>
+              ) : (
+                <button type="button" disabled style={secondaryButtonStyle} title="Only the primary store can change the shared plan">
                   Switch to this plan
                 </button>
               )}
@@ -277,7 +298,7 @@ export default function PlansPage() {
         <strong style={{ color: "#1a1a1a" }}>Note:</strong> Vaultd is a drop management and analytics tool. It does not process, collect, or handle any payments from your customers. All transactions from your drops happen directly through your Shopify store checkout.
       </p>
 
-      {currentPlan && (
+      {currentPlan && isPrimaryShop && (
         <div style={{ textAlign: "center", marginTop: 24 }}>
           <button
             type="button"

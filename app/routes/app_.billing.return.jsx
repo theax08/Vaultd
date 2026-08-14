@@ -49,6 +49,19 @@ export const loader = async ({ request }) => {
         account = result?.account ?? null;
         isNewAccount = true;
       }
+
+      // A linked (secondary) store must never overwrite the shared account's
+      // plan — that field is shared with the primary store (and any other
+      // linked stores), which may already be paying for a different tier.
+      if (account && account.primaryShopDomain && account.primaryShopDomain !== shop) {
+        back.set("billing", "error");
+        back.set(
+          "debug",
+          "This store shares a plan with another store. Plan changes must be made from the primary store."
+        );
+        return redirect(`/app/plans?${back}`);
+      }
+
       if (account) {
         await db.vaultdAccount.update({
           where: { id: account.id },

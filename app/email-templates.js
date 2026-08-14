@@ -117,7 +117,7 @@ function ctaButton(href, label, brandColor) {
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 8px 0 16px 0; table-layout: fixed;">
       <tr>
         <td align="center" style="padding: 0;">
-          <a href="${escapeHtml(href)}" style="display: block; box-sizing: border-box; text-align: center; text-decoration: none; background-color: ${brandColor || "#1a1a1a"}; color: #ffffff; font-size: 14px; font-weight: 600; padding: 14px 16px; border-radius: 8px;">
+          <a href="${escapeHtml(href)}" style="display: block; box-sizing: border-box; text-align: center; text-decoration: none; background-color: ${escapeHtml(brandColor || "#1a1a1a")}; color: #ffffff; font-size: 14px; font-weight: 600; padding: 14px 16px; border-radius: 8px;">
             ${escapeHtml(label)}
           </a>
         </td>
@@ -140,7 +140,7 @@ function shell({ boutiqueName, boutiqueLogo, brandColor, titleHtml, contentHtml,
         <td align="center" style="padding: 0 16px;">
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width: 640px; background-color: #ffffff; border-radius: 16px; overflow: hidden; border: 1px solid #e5e5e5;">
             <tr>
-              <td style="background-color: ${brandColor || "#1a1a1a"}; height: 4px; line-height: 4px; font-size: 0;">&nbsp;</td>
+              <td style="background-color: ${escapeHtml(brandColor || "#1a1a1a")}; height: 4px; line-height: 4px; font-size: 0;">&nbsp;</td>
             </tr>
 
             <tr>

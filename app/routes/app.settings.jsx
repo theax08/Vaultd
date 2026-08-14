@@ -268,7 +268,7 @@ export default function SettingsPage() {
   }, [actionData]);
 
   useEffect(() => {
-    if (actionData?.success) setIsCreating(false);
+    if (actionData?.intent === "create_account") setIsCreating(false);
     if (actionData?.intent === "request_password_reset" && actionData.success) {
       setResetCodeSent(true);
     }

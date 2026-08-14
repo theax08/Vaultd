@@ -3,7 +3,7 @@ import { Link, redirect, useLoaderData } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import { getAccountForShop } from "../vaultd-account.server";
-import { PLAN_ORDER, PLAN_SUMMARIES, PLAN_FEATURES, getPlanFeatureList } from "../vaultd-plans";
+import { PLAN_ORDER, PLAN_SUMMARIES, PLAN_FEATURES, getPlanFeatureList, getNewlyUnlockedFeatures } from "../vaultd-plans";
 import {
   pagePopStyle,
   cardPadded,
@@ -129,7 +129,11 @@ export const loader = async ({ request }) => {
     recentDrops,
     plan,
     features: PLAN_FEATURES[plan] ?? [],
-    hasNewFeatures: account ? account.lastSeenPlan !== account.plan : false,
+    // Une simple inegalite lastSeenPlan !== plan se declenche aussi sur une
+    // RETROGRADATION (le champ n'est jamais remis a jour a la baisse) — le
+    // point orange promettrait alors du "nouveau" a trouver alors que
+    // getNewlyUnlockedFeatures(), utilise sur Help, ne trouverait rien.
+    hasNewFeatures: account ? getNewlyUnlockedFeatures(account).length > 0 : false,
     hasScheduledDropWithNoActiveEmails,
   };
 };

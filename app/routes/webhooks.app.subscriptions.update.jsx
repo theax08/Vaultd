@@ -22,7 +22,7 @@ export const action = async ({ request }) => {
 
   const settings = await db.shopSettings.findUnique({
     where: { shopDomain: shop },
-    select: { vaultdAccountId: true },
+    select: { vaultdAccountId: true, account: { select: { primaryShopDomain: true } } },
   });
 
   if (!settings?.vaultdAccountId) return new Response(null, { status: 200 });
@@ -46,6 +46,16 @@ export const action = async ({ request }) => {
   // on ignore plutot que de reinitialiser le plan par defaut.
   const planKey = NAME_TO_KEY[planName];
   if (!planKey) return new Response(null, { status: 200 });
+
+  // A linked (secondary) store's own plan-tier subscription must never
+  // overwrite the shared account's plan — only the primary store's
+  // subscription is authoritative for that shared field. Without this, any
+  // linked store could independently subscribe/cancel a plan tier and
+  // silently downgrade or lock out every other store sharing the account.
+  if (settings.account?.primaryShopDomain && settings.account.primaryShopDomain !== shop) {
+    console.warn("[billing webhook] ignoring plan-tier update from non-primary shop", shop);
+    return new Response(null, { status: 200 });
+  }
 
   const newPlan = ACTIVE_STATUSES.has(status) ? planKey : "FREE";
 

@@ -154,7 +154,7 @@ export default function SupportPage() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "end" });
-  }, [selectedTicket?.messages?.length]);
+  }, [selectedTicketId, selectedTicket?.messages?.length]);
 
   useEffect(() => {
     if (actionData?.success && actionData.ticketId) {

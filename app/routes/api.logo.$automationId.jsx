@@ -4,6 +4,18 @@ import db from "../db.server";
 // partir du data: URI base64 stocke en base. Necessaire parce que les
 // clients mail (Gmail, Outlook...) bloquent ou cassent les <img src="data:...">
 // directement inlines dans le HTML d'un email.
+//
+// logoUrl est stocke tel quel depuis le formulaire (app.emails.jsx) — sans
+// cette liste blanche, un Content-Type arbitraire (ex: text/html) pourrait
+// etre reflete tel quel sur cette route publique et non authentifiee.
+const ALLOWED_LOGO_MIME_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+  "image/svg+xml",
+]);
+
 export const loader = async ({ params }) => {
   const automation = await db.emailAutomation.findUnique({
     where: { id: params.automationId },
@@ -17,6 +29,9 @@ export const loader = async ({ params }) => {
   }
 
   const [, mimeType, base64Payload] = match;
+  if (!ALLOWED_LOGO_MIME_TYPES.has(mimeType.toLowerCase())) {
+    return new Response("Not found", { status: 404 });
+  }
   const buffer = Buffer.from(base64Payload, "base64");
 
   return new Response(buffer, {

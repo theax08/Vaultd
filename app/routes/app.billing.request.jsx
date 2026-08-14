@@ -13,6 +13,19 @@ export const loader = async ({ request }) => {
 
   const { admin, session, billing } = await authenticate.admin(request);
 
+  // A linked (secondary) store must never be able to change the shared
+  // account's plan tier — that plan is shared with the primary store (and
+  // any other linked stores), which may be paying for a higher tier on its
+  // own Shopify billing. Only the primary store can switch tiers here;
+  // secondary stores only ever pay the per-store add-on (billing/link-request).
+  const { getAccountForShop } = await import("../vaultd-account.server");
+  const account = await getAccountForShop(session.shop);
+  if (account?.primaryShopDomain && account.primaryShopDomain !== session.shop) {
+    return redirect(
+      `/app/plans?billing=error&debug=${encodeURIComponent("This store shares a plan with another store. Plan changes must be made from the primary store.")}`
+    );
+  }
+
   const rawBase = process.env.SHOPIFY_APP_URL || new URL(request.url).origin;
   const baseUrl = (rawBase.startsWith("http") ? rawBase : `https://${rawBase}`).replace(/\/$/, "");
   const returnUrl = `${baseUrl}/app/billing/return?plan=${plan}&shop=${session.shop}${host ? `&host=${encodeURIComponent(host)}` : ""}`;

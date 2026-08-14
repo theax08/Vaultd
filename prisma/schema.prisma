@@ -31,6 +31,7 @@ model VaultdAccount {
   id                       String    @id @default(cuid())
   plan                     String    @default("FREE")
   lastSeenPlan             String    @default("FREE")
+  primaryShopDomain        String?
   appearanceColor          String    @default("black")
   email                    String?   @unique
   emailVerifiedAt          DateTime?

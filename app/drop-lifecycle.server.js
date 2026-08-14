@@ -117,12 +117,19 @@ async function notifyWaitlist(drop, type) {
 
 // Met le drop en LIVE (logique partagee entre le bouton manuel "Launch" et
 // l'auto-launch) et notifie toute la waitlist.
+//
+// updateMany + where:status:"DRAFT" rend la transition atomique : si deux
+// appels concurrents (ex. le cron et un onglet /app/live qui poll en meme
+// temps) visent le meme drop, un seul des deux voit count > 0 et envoie
+// l'email — l'autre trouve la ligne deja passee en LIVE et ne fait rien,
+// au lieu de doubler l'envoi a toute la waitlist.
 export async function launchDrop(drop) {
   const now = new Date();
-  await db.drop.update({
-    where: { id: drop.id },
+  const result = await db.drop.updateMany({
+    where: { id: drop.id, status: "DRAFT" },
     data: { status: "LIVE", startTime: now, endTime: null },
   });
+  if (result.count === 0) return;
 
   await notifyWaitlist({ ...drop, startTime: now, endTime: null }, "DROP_LIVE");
 }
@@ -160,8 +167,11 @@ export async function endDrop(drop) {
   const maxUnits = drop.maxUnits ?? 0;
   const soldOut = maxUnits > 0 ? totalItemsSold >= maxUnits : false;
 
-  await db.drop.update({
-    where: { id: dropId },
+  // updateMany + where:status:"LIVE", meme raisonnement que launchDrop : rend
+  // la cloture atomique face a un appel concurrent (cron vs bouton manuel vs
+  // un autre poll) pour ne pas doubler l'email "drop ended" a la waitlist.
+  const result = await db.drop.updateMany({
+    where: { id: dropId, status: "LIVE" },
     data: {
       status: "ENDED",
       endTime,
@@ -178,6 +188,7 @@ export async function endDrop(drop) {
       soldOut,
     },
   });
+  if (result.count === 0) return;
 
   // notifyWaitlist a besoin des stats qu'on vient de calculer, pas de celles
   // (perimees) du `drop` recu en parametre.

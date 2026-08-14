@@ -5,6 +5,8 @@ import {
 } from "../email-automations.server";
 import { buildUnsubscribeUrl, buildLogoUrl } from "../unsubscribe.server";
 import { checkBotProtection } from "../bot-protection.server";
+import { getAccountForShop } from "../vaultd-account.server";
+import { PLAN_ORDER } from "../vaultd-plans";
 
 export const action = async ({ request }) => {
   try {
@@ -33,6 +35,20 @@ export const action = async ({ request }) => {
     if (!drop) {
       console.error("waitlist: unknown externalDropId", externalDropId);
       return jsonError("Unknown dropId", 400);
+    }
+
+    // Un marchand sans plan actif (jamais paye, ou desabonne) ne doit plus
+    // pouvoir collecter des inscriptions ni declencher d'envois d'email —
+    // sinon la fonctionnalite continue de tourner gratuitement indefiniment.
+    let account = null;
+    try {
+      account = await getAccountForShop(drop.shopDomain);
+    } catch (err) {
+      console.error("waitlist: account lookup failed", drop.shopDomain, err);
+    }
+    if (!PLAN_ORDER.includes(account?.plan)) {
+      console.warn("waitlist: rejected, no active plan", drop.shopDomain);
+      return jsonError("This waitlist is not currently accepting signups", 403);
     }
 
     // Honeypot / timing / rate-limit (toujours actifs) + Turnstile (si

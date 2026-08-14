@@ -11,9 +11,18 @@ const RATE_LIMIT_MAX_PER_IP = 8;
 // serveur. Cle = shopDomain + ip.
 const submissionLog = new Map();
 
+// X-Forwarded-For est "client, proxy1, proxy2, ..." — chaque hop AJOUTE son
+// IP a droite. Le PREMIER element est ce que le client a lui-meme envoye et
+// est donc falsifiable a volonte ; seul le DERNIER element (ajoute par notre
+// propre proxy Railway, la seule sauté qu'on controle/fait confiance) est
+// fiable. Se fier au premier permettait de contourner le rate-limit en
+// changeant juste l'en-tete a chaque requete.
 function getClientIp(request) {
   const forwarded = request.headers.get("x-forwarded-for");
-  if (forwarded) return forwarded.split(",")[0].trim();
+  if (forwarded) {
+    const parts = forwarded.split(",").map((p) => p.trim()).filter(Boolean);
+    if (parts.length > 0) return parts[parts.length - 1];
+  }
   return request.headers.get("x-real-ip") || "unknown";
 }
 

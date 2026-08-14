@@ -401,6 +401,9 @@ export const action = async ({ request }) => {
       // fois LIVE/ENDED, maxUnits doit rester fige (sinon les stats de vente
       // n'auraient plus de sens).
       const existing = await db.drop.findFirst({ where: { id: dropId, shopDomain } });
+      if (!existing) {
+        throw new Response("Drop not found", { status: 404 });
+      }
       const data = {
         name,
         startTime,
@@ -411,12 +414,12 @@ export const action = async ({ request }) => {
         referralEnabled,
         referralPointsPerShare,
       };
-      if (existing?.status === "DRAFT") {
+      if (existing.status === "DRAFT") {
         data.maxUnits = maxUnits;
       }
 
-      await db.drop.update({
-        where: { id: dropId },
+      await db.drop.updateMany({
+        where: { id: dropId, shopDomain },
         data,
       });
     }
@@ -427,6 +430,10 @@ export const action = async ({ request }) => {
   // --- TRAITEMENT LOGIQUE : DELETE ---
   if (intent === "delete") {
     const dropId = formData.get("dropId");
+    const existing = await db.drop.findFirst({ where: { id: dropId, shopDomain } });
+    if (!existing) {
+      throw new Response("Drop not found", { status: 404 });
+    }
     await db.drop.delete({
       where: { id: dropId },
     });

@@ -26,6 +26,7 @@ const TYPES = {
 
 const SUBJECT_RECOMMENDED_LIMIT = 60;
 const PREVIEW_SAMPLE_POSITION = 248;
+const HEX_COLOR_RE = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
 
 // Anti-abus basique sur "Send a test" — en memoire (un seul process Railway),
 // pas besoin de plus pour une fonctionnalite a faible enjeu.
@@ -187,9 +188,20 @@ export const action = async ({ request }) => {
   // qui a son propre intent immediat plus bas.
   if (intent === "SAVE_TEMPLATE") {
     const brandName = formData.get("brandName")?.toString() || "";
-    const mainColor = formData.get("mainColor")?.toString() || "#1a1a1a";
+    const mainColorRaw = formData.get("mainColor")?.toString() || "#1a1a1a";
+    // mainColor lands raw inside a style="..." attribute in every customer
+    // email — reject anything that isn't an actual hex color instead of
+    // storing it (email-templates.js also escapes it, but garbage should
+    // never be saved as a "color" in the first place).
+    if (!HEX_COLOR_RE.test(mainColorRaw)) {
+      return { intent, error: "Main color must be a valid hex color (e.g. #1a1a1a)." };
+    }
+    const mainColor = mainColorRaw;
     const dropExternalId = formData.get("dropExternalId")?.toString() || "";
     const logoUrl = formData.get("logoUrl")?.toString() || null;
+    if (logoUrl && !/^data:image\/(png|jpeg|gif|webp|svg\+xml);base64,/i.test(logoUrl)) {
+      return { intent, error: "Logo must be a PNG, JPEG, GIF, WebP, or SVG image." };
+    }
 
     let dropId = null;
     if (dropExternalId) {
