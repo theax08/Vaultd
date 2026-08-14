@@ -1,4 +1,5 @@
 import db from "./db.server";
+import { verifyWaitlistToken } from "./waitlist-token.server";
 
 // Honeypot + timing sont toujours actifs (gratuits, invisibles). Turnstile
 // est le morceau "Elite" : il faut une cle Cloudflare configuree par le
@@ -41,11 +42,15 @@ export function isHoneypotTripped(formData) {
 }
 
 // Un humain ne peut pas remplir le formulaire en moins de ~1s ; un bot qui
-// POST directement sans charger/rendre la page le fait quasi instantanement.
-export function isSubmissionTooFast(formData) {
-  const renderedAt = Number(formData.get("rendered_at") || 0);
-  if (!renderedAt) return true; // champ absent = pas passe par le vrai formulaire
-  return Date.now() - renderedAt < MIN_SUBMIT_DELAY_MS;
+// POST directement sans passer par notre serveur (donc sans jeton valide,
+// voir waitlist-token.server.js) est traite comme "trop rapide" par
+// definition — contrairement a un timestamp envoye par le client, celui-ci
+// ne peut pas etre invente sans connaitre notre secret serveur.
+export function isSubmissionTooFast(formData, shopDomain) {
+  const token = (formData.get("wl_token") || "").toString();
+  const issuedAt = verifyWaitlistToken(token, shopDomain);
+  if (!issuedAt) return true; // jeton absent/invalide/perime = pas passe par le vrai widget
+  return Date.now() - issuedAt < MIN_SUBMIT_DELAY_MS;
 }
 
 // Limite le nombre d'inscriptions par IP sur une fenetre glissante, pour
@@ -100,7 +105,7 @@ export async function verifyTurnstileToken(secretKey, token, request) {
 // etre rejetee.
 export async function checkBotProtection(request, formData, shopDomain) {
   if (isHoneypotTripped(formData)) return "honeypot";
-  if (isSubmissionTooFast(formData)) return "too_fast";
+  if (isSubmissionTooFast(formData, shopDomain)) return "too_fast";
   if (isRateLimited(request, shopDomain)) return "rate_limited";
 
   const settings = await getShopSettings(shopDomain);

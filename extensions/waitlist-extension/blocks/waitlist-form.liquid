@@ -124,7 +124,7 @@
         <form id="hype-waitlist-form-{{ block.id }}">
           <input type="hidden" id="active-drop-id-{{ block.id }}" name="dropId">
           <input type="hidden" id="referral-code-{{ block.id }}" name="ref">
-          <input type="hidden" id="rendered-at-{{ block.id }}" name="rendered_at">
+          <input type="hidden" id="wl-token-{{ block.id }}" name="wl_token">
 
           <div style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden;" aria-hidden="true">
             <label for="hp-field-{{ block.id }}">Leave this field empty</label>
@@ -207,15 +207,30 @@
     const nameEl = document.getElementById('dynamic-drop-name-' + id);
     const idEl = document.getElementById('active-drop-id-' + id);
     const refEl = document.getElementById('referral-code-' + id);
-    const renderedAtEl = document.getElementById('rendered-at-' + id);
+    const wlTokenEl = document.getElementById('wl-token-' + id);
     const turnstileContainer = document.getElementById('turnstile-container-' + id);
     const form = document.getElementById('hype-waitlist-form-' + id);
     const successEl = document.getElementById('waitlist-success-' + id);
     const storageKeyFor = (dropId) => 'vaultd_waitlist_' + dropId;
 
-    // Anti-bot : horodatage de rendu (timing check cote serveur) et chargement
-    // conditionnel du challenge Turnstile si le marchand l'a active.
-    if (renderedAtEl) renderedAtEl.value = Date.now();
+    // Anti-bot (timing check cote serveur) : un jeton signe par NOTRE
+    // serveur, impossible a fabriquer par un POST direct qui saute cette
+    // etape. Rafraichi periodiquement pour qu'un onglet reste ouvert
+    // longtemps garde un jeton valide au moment de l'envoi.
+    let waitlistTokenReady = fetchWaitlistToken();
+    function fetchWaitlistToken() {
+      const params = new URLSearchParams(window.location.search);
+      const shop = params.get('shop') || (window.Shopify && window.Shopify.shop) || '';
+      const qs = new URLSearchParams();
+      if (shop) qs.set('shop', shop);
+      return fetch('/apps/hype/api/waitlist-token?' + qs.toString())
+        .then(function(res) { return res.ok ? res.json() : null; })
+        .then(function(data) {
+          if (data && data.token && wlTokenEl) wlTokenEl.value = data.token;
+        })
+        .catch(function() {});
+    }
+    setInterval(function() { waitlistTokenReady = fetchWaitlistToken(); }, 5 * 60 * 1000);
 
     (async function loadBotProtection() {
       try {
@@ -470,6 +485,10 @@
     if (form) {
   form.addEventListener('submit', async function(e) {
     e.preventDefault();
+    // S'assure que le jeton (recupere de facon asynchrone au chargement)
+    // est bien arrive avant de construire le FormData — sinon un envoi
+    // ultra-rapide partirait avec le champ encore vide.
+    await waitlistTokenReady;
     const fd = new FormData(form);
     fd.append('intent', 'join');
     const dropId = fd.get('dropId');
