@@ -139,6 +139,7 @@ model DropProductStats {
   lastSoldAt         DateTime?
   createdAt          DateTime  @default(now())
 
+  @@unique([dropId, productId])
   @@index([shopDomain, dropId])
 }
 

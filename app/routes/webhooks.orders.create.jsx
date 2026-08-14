@@ -81,20 +81,30 @@ export const action = async ({ request }) => {
   const firstProductName =
     matchingLineItems[0]?.name || matchingLineItems[0]?.title || null;
 
-  await db.dropOrder.create({
-    data: {
-      shopDomain: shop,
-      dropId: matchingDrop.id,
-      shopifyOrderId: String(order.id),
-      shopifyOrderName: order.name || null,
-      customerEmail,
-      totalAmount,
-      currencyCode: order.currency || matchingDrop.baseCurrency || "USD",
-      itemCount,
-      firstProductName,
-      fromWaitlist,
-    },
-  });
+  try {
+    await db.dropOrder.create({
+      data: {
+        shopDomain: shop,
+        dropId: matchingDrop.id,
+        shopifyOrderId: String(order.id),
+        shopifyOrderName: order.name || null,
+        customerEmail,
+        totalAmount,
+        currencyCode: order.currency || matchingDrop.baseCurrency || "USD",
+        itemCount,
+        firstProductName,
+        fromWaitlist,
+      },
+    });
+  } catch (err) {
+    // Shopify peut livrer le meme webhook plusieurs fois en parallele : deux
+    // requetes concurrentes peuvent toutes les deux passer le check
+    // d'idempotence ci-dessus avant que l'une des deux n'ait commit. La
+    // seconde tombe alors sur @@unique([dropId, shopifyOrderId]) — deja
+    // traite par l'autre requete, rien de plus a faire ici.
+    if (err.code === "P2002") return new Response();
+    throw err;
+  }
 
   // 3) Stats par produit (pour le "Most Demanded" ranking)
   const orderCreatedAt = order.created_at ? new Date(order.created_at) : new Date();
@@ -105,33 +115,28 @@ export const action = async ({ request }) => {
     const quantity = Number(li.quantity || 0);
     const revenue = Number(li.price || 0) * quantity;
 
-    const existingStats = await db.dropProductStats.findFirst({
-      where: { dropId: matchingDrop.id, productId },
+    // upsert + increment plutot que lire-puis-ecrire : deux commandes pour le
+    // meme produit livrees en parallele (frequent pendant un drop qui vend
+    // vite) pouvaient sinon lire le meme unitsSold de depart et l'une des
+    // deux ventes disparaissait silencieusement du classement "Most Demanded".
+    await db.dropProductStats.upsert({
+      where: { dropId_productId: { dropId: matchingDrop.id, productId } },
+      create: {
+        shopDomain: shop,
+        dropId: matchingDrop.id,
+        productId,
+        variantId,
+        productName: li.name || li.title || "Unknown product",
+        unitsSold: quantity,
+        revenue,
+        lastSoldAt: orderCreatedAt,
+      },
+      update: {
+        unitsSold: { increment: quantity },
+        revenue: { increment: revenue },
+        lastSoldAt: orderCreatedAt,
+      },
     });
-
-    if (existingStats) {
-      await db.dropProductStats.update({
-        where: { id: existingStats.id },
-        data: {
-          unitsSold: existingStats.unitsSold + quantity,
-          revenue: Number(existingStats.revenue) + revenue,
-          lastSoldAt: orderCreatedAt,
-        },
-      });
-    } else {
-      await db.dropProductStats.create({
-        data: {
-          shopDomain: shop,
-          dropId: matchingDrop.id,
-          productId,
-          variantId,
-          productName: li.name || li.title || "Unknown product",
-          unitsSold: quantity,
-          revenue,
-          lastSoldAt: orderCreatedAt,
-        },
-      });
-    }
   }
 
   // 4) Evenement pour le flux "Who is buying" de la live page
