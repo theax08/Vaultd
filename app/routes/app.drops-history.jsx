@@ -295,8 +295,31 @@ export default function DropsHistoryPage() {
   const [statusFilter, setStatusFilter] = React.useState([]);
   const [filterOpen, setFilterOpen] = React.useState(false);
   const [sortOpen, setSortOpen] = React.useState(false);
-  const [sortKey, setSortKey] = React.useState("date");
-  const [sortDir, setSortDir] = React.useState("desc");
+  // Persiste le tri choisi (localStorage) pour qu'il survive une navigation
+  // vers une autre page et un retour ici, plutot que de revenir a "Date".
+  const [sortKey, setSortKey] = React.useState(() => {
+    if (typeof window === "undefined") return "date";
+    try {
+      return localStorage.getItem("vaultd:drops-history:sortKey") || "date";
+    } catch {
+      return "date";
+    }
+  });
+  const [sortDir, setSortDir] = React.useState(() => {
+    if (typeof window === "undefined") return "desc";
+    try {
+      return localStorage.getItem("vaultd:drops-history:sortDir") || "desc";
+    } catch {
+      return "desc";
+    }
+  });
+
+  React.useEffect(() => {
+    try {
+      localStorage.setItem("vaultd:drops-history:sortKey", sortKey);
+      localStorage.setItem("vaultd:drops-history:sortDir", sortDir);
+    } catch {}
+  }, [sortKey, sortDir]);
 
   const toggleStatusFilter = (key) => {
     setStatusFilter((prev) =>
@@ -564,11 +587,7 @@ export default function DropsHistoryPage() {
               color: "#919191",
             }}
           >
-            {/* On pourrait comptabiliser sold out / partial en détail,
-                pour l'instant on laisse une phrase simple */}
-            {/* 3 sold out · 1 partial */}
-            {/* Si tu veux la vraie répartition, on peut la calculer aussi */}
-            {summary.dropsCompleted} completed drops
+            All-time
           </div>
         </div>
 

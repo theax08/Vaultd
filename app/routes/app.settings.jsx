@@ -18,7 +18,6 @@ import {
   GridIcon,
   card,
   cardPadded,
-  cardLabel,
   pillBadge,
   inputStyle,
   primaryButtonStyle,
@@ -52,6 +51,38 @@ const SHORT_PLAN_LABEL = {
   SCALE: "Scale",
   ELITE: "Elite",
 };
+
+// cardLabel (partagé) teinte avec l'accent choisi par le marchand — correct
+// pour une carte de métrique, mais un titre de section n'est pas un des
+// quatre usages autorisés de l'accent (boutons/liens/focus/graphiques).
+// Token eyebrow neutre, propre à cette page (VAULTD-DESIGN §14.6, §15).
+const sectionEyebrowStyle = {
+  fontSize: 11,
+  fontWeight: 600,
+  color: "var(--vd-ink-3, #8B93A0)",
+  letterSpacing: "0.07em",
+  textTransform: "uppercase",
+  marginBottom: 7,
+};
+
+function EyeIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+      <circle cx="8" cy="8" r="2.2" stroke="currentColor" strokeWidth="1.3" />
+    </svg>
+  );
+}
+
+function EyeOffIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+      <circle cx="8" cy="8" r="2.2" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M2 13.5 14 2.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  );
+}
 
 export const loader = async ({ request }) => {
   const { session, admin } = await authenticate.admin(request);
@@ -203,6 +234,10 @@ export default function SettingsPage() {
   const [bpSiteKey, setBpSiteKey] = useState(botProtection.siteKey);
   const [bpSecretKey, setBpSecretKey] = useState(botProtection.secretKey);
   const [isSavingBotProt, setIsSavingBotProt] = useState(false);
+  const [showBpSecret, setShowBpSecret] = useState(false);
+  // Aperçu optimiste : reflete le clic immediatement, sans attendre le
+  // round-trip serveur de handleSetColor (VAULTD-DESIGN §14.2).
+  const [previewColorKey, setPreviewColorKey] = useState(account?.appearanceColor || "black");
 
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
@@ -272,6 +307,7 @@ export default function SettingsPage() {
   };
 
   const handleSetColor = (color) => {
+    setPreviewColorKey(color);
     submit({ intent: "set_appearance", color }, { method: "post" });
   };
 
@@ -352,12 +388,12 @@ export default function SettingsPage() {
               style={{
                 textAlign: "left",
                 border: "none",
-                background: activeSection === s.key ? "#f2f2f2" : "transparent",
-                borderRadius: 8,
-                padding: "8px 10px",
+                background: activeSection === s.key ? "var(--vd-subtle, #F5F6F7)" : "transparent",
+                borderRadius: "var(--vd-radius-sm, 8px)",
+                padding: "8px 12px",
                 fontSize: 13.5,
-                fontWeight: 600,
-                color: activeSection === s.key ? "var(--vaultd-accent, #1a1a1a)" : "#303030",
+                fontWeight: activeSection === s.key ? 500 : 400,
+                color: activeSection === s.key ? "var(--vd-ink, #14181F)" : "var(--vd-ink-2, #5C6470)",
                 cursor: "pointer",
               }}
             >
@@ -370,7 +406,7 @@ export default function SettingsPage() {
         <div style={{ flex: 1, padding: 20, maxWidth: 640 }}>
       {activeSection === "account" && (
         <>
-        <div style={cardLabel}>ACCOUNT</div>
+        <div style={sectionEyebrowStyle}>ACCOUNT</div>
 
         {!account ? (
           <>
@@ -529,7 +565,7 @@ export default function SettingsPage() {
               )}
             </div>
 
-            <div style={cardLabel}>LINKED STORES ({account.shops.length})</div>
+            <div style={sectionEyebrowStyle}>LINKED STORES ({account.shops.length})</div>
             <ul style={{ margin: "0 0 16px 0", paddingLeft: 18, fontSize: 13, color: "#303030" }}>
               {account.shops.map((s) => (
                 <li key={s.id}>
@@ -564,7 +600,7 @@ export default function SettingsPage() {
               )}
             </div>
 
-            <div style={cardLabel}>LINK ANOTHER STORE</div>
+            <div style={sectionEyebrowStyle}>LINK ANOTHER STORE</div>
             {!isElite ? (
               <p style={{ fontSize: 13, color: "#6d7175" }}>
                 Linking another store to this account is only available on the Elite plan.{" "}
@@ -581,7 +617,7 @@ export default function SettingsPage() {
             )}
 
             <div style={{ marginTop: 18, paddingTop: 16, borderTop: "1px solid #e3e3e3" }}>
-              <div style={cardLabel}>JOIN A DIFFERENT ACCOUNT</div>
+              <div style={sectionEyebrowStyle}>JOIN A DIFFERENT ACCOUNT</div>
               <p style={{ fontSize: 13, color: "#6d7175", margin: "0 0 8px 0" }}>
                 Already run Vaultd on another store with an Elite account? Log in with
                 that account's ID and password to switch this store over to it.
@@ -616,11 +652,11 @@ export default function SettingsPage() {
 
       {activeSection === "appearance" && (
         <>
-        <div style={cardLabel}>APPEARANCE</div>
+        <div style={sectionEyebrowStyle}>APPEARANCE</div>
         <p style={{ fontSize: 13.5, color: "#303030", margin: "0 0 14px 0" }}>
           Choose the accent color used across the app's buttons and links.
         </p>
-        <div style={{ display: "flex", gap: 12 }}>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           {COLOR_OPTIONS.map((opt) => {
             const unlocked = account ? canUseColor(plan, opt.key) : opt.key === "black";
             const active = account?.appearanceColor === opt.key;
@@ -631,22 +667,46 @@ export default function SettingsPage() {
                 disabled={!unlocked}
                 onClick={() => handleSetColor(opt.key)}
                 style={{
+                  position: "relative",
+                  width: 72,
+                  height: 72,
                   display: "flex",
                   flexDirection: "column",
                   alignItems: "center",
+                  justifyContent: "center",
                   gap: 6,
-                  padding: "10px 14px",
-                  borderRadius: 10,
-                  border: active ? "2px solid #1a1a1a" : "1px solid #e3e3e3",
-                  background: "#ffffff",
+                  borderRadius: "var(--vd-radius-sm, 8px)",
+                  border: "none",
+                  background: "var(--vd-card, #ffffff)",
+                  boxShadow: active ? "0 0 0 1.5px var(--vd-ink, #14181F)" : "var(--vd-ring)",
                   cursor: unlocked ? "pointer" : "default",
                   opacity: unlocked ? 1 : 0.5,
                 }}
               >
-                <span style={{ width: 24, height: 24, borderRadius: "50%", background: opt.hex }} />
-                <span style={{ fontSize: 12, color: "#1a1a1a" }}>{COLOR_DISPLAY_LABELS[opt.key]}</span>
+                {active && (
+                  <span
+                    style={{
+                      position: "absolute",
+                      top: 6,
+                      right: 6,
+                      width: 14,
+                      height: 14,
+                      borderRadius: "50%",
+                      background: "var(--vd-ink, #14181F)",
+                      color: "#fff",
+                      fontSize: 9,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    ✓
+                  </span>
+                )}
+                <span style={{ width: 28, height: 28, borderRadius: "50%", background: opt.hex }} />
+                <span style={{ fontSize: 12, fontWeight: 400, color: "var(--vd-ink-2, #5C6470)" }}>{COLOR_DISPLAY_LABELS[opt.key]}</span>
                 {!unlocked && (
-                  <span style={{ fontSize: 10.5, color: "#919191" }}>
+                  <span style={{ fontSize: 9.5, color: "var(--vd-ink-3, #8B93A0)" }}>
                     {SHORT_PLAN_LABEL[opt.minPlan]}+
                   </span>
                 )}
@@ -654,12 +714,30 @@ export default function SettingsPage() {
             );
           })}
         </div>
+
+        {/* Aperçu en direct — pour voir l'effet sans quitter la page
+            (VAULTD-DESIGN §14.2). L'accent ne touche que boutons/liens/focus/
+            graphiques : les pastilles d'etat de drop et les comptes a rebours
+            gardent toujours leurs propres tokens, jamais cette couleur. */}
+        {(() => {
+          const previewOpt = COLOR_OPTIONS.find((o) => o.key === previewColorKey) ?? COLOR_OPTIONS[0];
+          return (
+            <div style={{ marginTop: 18, paddingTop: 16, borderTop: "1px solid var(--vd-hairline, #e3e3e3)", display: "flex", alignItems: "center", gap: 16 }}>
+              <button type="button" style={{ ...primaryButtonStyle, background: previewOpt.hex }}>
+                Create drop
+              </button>
+              <a href="#preview" onClick={(e) => e.preventDefault()} style={{ color: previewOpt.hex, fontWeight: 600, fontSize: 13 }}>
+                View plans →
+              </a>
+            </div>
+          );
+        })()}
         </>
       )}
 
       {activeSection === "bot_protection" && (
         <>
-        <div style={cardLabel}>BOT PROTECTION</div>
+        <div style={sectionEyebrowStyle}>BOT PROTECTION</div>
         {!isElite ? (
           <>
           <p style={{ fontSize: 13.5, color: "#303030", margin: "0 0 10px 0" }}>
@@ -696,7 +774,34 @@ export default function SettingsPage() {
           </div>
           <div style={{ marginBottom: 16 }}>
             <span style={{ fontSize: 13, fontWeight: 600, color: "#1a1a1a", display: "block", marginBottom: 6 }}>Turnstile secret key</span>
-            <input type="password" value={bpSecretKey} onChange={(e) => setBpSecretKey(e.target.value)} placeholder="0x4AAAAAAA..." style={{ ...inputStyle, maxWidth: 420 }} />
+            <div style={{ position: "relative", maxWidth: 420 }}>
+              <input
+                type={showBpSecret ? "text" : "password"}
+                value={bpSecretKey}
+                onChange={(e) => setBpSecretKey(e.target.value)}
+                placeholder="0x4AAAAAAA..."
+                style={{ ...inputStyle, paddingRight: 38 }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowBpSecret((v) => !v)}
+                aria-label={showBpSecret ? "Hide secret key" : "Show secret key"}
+                style={{
+                  position: "absolute",
+                  top: "50%",
+                  right: 8,
+                  transform: "translateY(-50%)",
+                  background: "none",
+                  border: "none",
+                  padding: 4,
+                  cursor: "pointer",
+                  color: "#6d7175",
+                  display: "flex",
+                }}
+              >
+                {showBpSecret ? <EyeOffIcon /> : <EyeIcon />}
+              </button>
+            </div>
             <p style={{ marginTop: 6, fontSize: 12, color: "#6d7175" }}>
               Get both keys at{" "}
               <a href="https://dash.cloudflare.com/?to=/:account/turnstile" target="_blank" rel="noreferrer" style={{ color: "#1a1a1a", fontWeight: 600 }}>dash.cloudflare.com</a>

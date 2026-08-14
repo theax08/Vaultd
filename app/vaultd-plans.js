@@ -86,13 +86,21 @@ function unitsLine(plan) {
 }
 
 // Liste complete (cumulative) des lignes a afficher pour un plan donne.
+// Les 4 couleurs d'accent tiennent en une seule ligne resumee ("N accent
+// colors") plutot qu'une ligne par couleur — meme fonctionnalite, quatre
+// fois repetee sinon (VAULTD-DESIGN §10.2). Noir n'est pas debloque par un
+// palier (dispo partout), donc pas compte dans colorKeys.
 export function getPlanFeatureList(plan) {
   if (!plan || !PLAN_ORDER.includes(plan)) return [];
   const allKeys = (PLAN_FEATURES[plan] ?? []).filter((key) => key !== "unlimited_drops");
   const colorKeys = allKeys.filter((key) => key.startsWith("color_"));
   const featureKeys = allKeys.filter((key) => !key.startsWith("color_"));
-  const labels = [...featureKeys, ...colorKeys].map((key) => FEATURE_LABELS[key]);
-  return [...labels, dropsLine(plan), unitsLine(plan)].filter(Boolean);
+  const labels = featureKeys.map((key) => FEATURE_LABELS[key]);
+  const colorsLine =
+    colorKeys.length > 0
+      ? `${colorKeys.length + 1} accent colors` // +1 pour le noir, toujours dispo
+      : null;
+  return [...labels, colorsLine, dropsLine(plan), unitsLine(plan)].filter(Boolean);
 }
 
 export const PLAN_SUMMARIES = PLAN_ORDER.reduce((acc, plan) => {
@@ -106,12 +114,20 @@ export const PLAN_SUMMARIES = PLAN_ORDER.reduce((acc, plan) => {
 
 // Apparence : chaque plan debloque sa couleur ET conserve celles des paliers
 // inferieurs (gating cumulatif). Noir disponible sur tous les plans payants.
+// Teintes desaturees/assombries (VAULTD-DESIGN §14.1) : les couleurs
+// primaires trop saturees ecrasent le reste sur un bouton plein et jurent
+// avec l'admin Shopify. Regle absolue liee a ce choix : cette palette
+// n'affecte JAMAIS les pastilles d'etat de drop, le liseré .vd-drop, ni les
+// comptes a rebours — ces elements gardent toujours leurs tokens --vd-live /
+// --vd-sched / --vd-draft / --vd-ended propres, jamais var(--vaultd-accent).
+// L'accent ne touche que : boutons primaires, liens, anneaux de focus,
+// remplissages de graphiques.
 export const COLOR_OPTIONS = [
-  { key: "black", hex: "#1a1a1a", minPlan: "GROWTH" },
-  { key: "blue", hex: "#3b82f6", minPlan: "PRO" },
-  { key: "red", hex: "#dc2626", minPlan: "PRO" },
-  { key: "violet", hex: "#7c3aed", minPlan: "SCALE" },
-  { key: "gold", hex: "#ca8a04", minPlan: "ELITE" },
+  { key: "black", hex: "#14181F", minPlan: "GROWTH" },
+  { key: "blue", hex: "#1F4FD8", minPlan: "PRO" },
+  { key: "red", hex: "#B3212F", minPlan: "PRO" },
+  { key: "violet", hex: "#5B3AA8", minPlan: "SCALE" },
+  { key: "gold", hex: "#9A6B08", minPlan: "ELITE" },
 ];
 
 export function canUseColor(plan, color) {

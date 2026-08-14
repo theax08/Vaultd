@@ -231,6 +231,46 @@ export default function SupportPage() {
 
   const activeCategory = SUPPORT_CATEGORIES.find((c) => c.key === menuCategory) || null;
 
+  const topicPillStyle = {
+    padding: "6px 12px",
+    fontSize: 12,
+    color: "var(--vd-ink-2, #5C6470)",
+    background: "var(--vd-subtle, #F5F6F7)",
+    border: "0.5px solid var(--vd-hairline, #E3E3E3)",
+    borderRadius: 6,
+    cursor: "pointer",
+    height: 30,
+    display: "inline-flex",
+    alignItems: "center",
+  };
+
+  const topicPills = !activeCategory ? (
+    <>
+      {SUPPORT_CATEGORIES.map((cat) => (
+        <button key={cat.key} type="button" onClick={() => setMenuCategory(cat.key)} className="vd-topic-pill" style={topicPillStyle}>
+          {cat.label}
+        </button>
+      ))}
+      <button type="button" onClick={handleOther} className="vd-topic-pill" style={topicPillStyle}>
+        Other
+      </button>
+    </>
+  ) : (
+    <>
+      <button type="button" onClick={() => setMenuCategory(null)} className="vd-topic-pill" style={topicPillStyle}>
+        ← All topics
+      </button>
+      {activeCategory.questions.map((item) => (
+        <button key={item.question} type="button" onClick={() => handleAskFaq(item)} className="vd-topic-pill" style={topicPillStyle}>
+          {item.question}
+        </button>
+      ))}
+      <button type="button" onClick={handleOther} className="vd-topic-pill" style={topicPillStyle}>
+        Other
+      </button>
+    </>
+  );
+
   return (
     <div style={{ fontFamily: popFontFamily, display: "flex", flexDirection: "column", minHeight: "100vh" }}>
       <div style={{ ...card, display: "flex", flexDirection: "column", flex: 1, minHeight: 0, padding: 0, overflow: "hidden", borderRadius: 0 }}>
@@ -250,10 +290,15 @@ export default function SupportPage() {
             placeholder="Search conversations…"
             style={{ ...inputStyle, marginBottom: 10, fontSize: 13 }}
           />
-          <button type="button" onClick={handleNewChat} style={{ ...primaryButtonStyle, marginBottom: 12 }}>
+          <button type="button" onClick={handleNewChat} style={{ ...secondaryButtonStyle, marginBottom: 12 }}>
             + New chat
           </button>
           <div style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
+            {filteredTickets.length === 0 && (
+              <p style={{ fontSize: 12, color: "var(--vd-ink-3, #8B93A0)", textAlign: "center", marginTop: 24 }}>
+                No conversations yet.
+              </p>
+            )}
             {filteredTickets.map((t) => (
               <button
                 key={t.id}
@@ -282,9 +327,6 @@ export default function SupportPage() {
                 <div style={{ fontSize: 13, fontWeight: 600, color: "#1a1a1a" }}>{t.title}</div>
               </button>
             ))}
-            {filteredTickets.length === 0 && (
-              <p style={{ fontSize: 12.5, color: "#919191", padding: "0 10px" }}>No conversations yet.</p>
-            )}
           </div>
         </div>
 
@@ -300,67 +342,34 @@ export default function SupportPage() {
           )}
 
           <div style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
-            {!selectedTicket && (
-              <p style={{ fontSize: 13, color: "#6d7175" }}>
-                Pick a topic below, or describe what's going on. Type <code>!help</code> anytime to see the topics again.
-              </p>
+            {!selectedTicket ? (
+              // Tant qu'il n'y a pas de message : un bloc unique centre
+              // verticalement, pas colle en haut avec du vide en dessous
+              // (VAULTD-DESIGN §12.1)
+              <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", gap: 16, padding: "20px" }}>
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: "#1a1a1a", marginBottom: 6 }}>Need help?</div>
+                  <p style={{ fontSize: 13, color: "#6d7175", margin: 0, maxWidth: 380 }}>
+                    Pick a topic below, or describe what's going on. Type <code>!help</code> anytime to see the topics again.
+                  </p>
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "center", maxWidth: 480 }}>
+                  {topicPills}
+                </div>
+              </div>
+            ) : (
+              selectedTicket.messages.map((m) => (
+                <Bubble key={m.id} sender={m.sender} body={m.body} />
+              ))
             )}
-            {selectedTicket?.messages.map((m) => (
-              <Bubble key={m.id} sender={m.sender} body={m.body} />
-            ))}
             <div ref={bottomRef} />
           </div>
 
-          {isComposing && (
+          {/* Une fois la conversation demarree, les puces migrent au-dessus
+              du champ de saisie (VAULTD-DESIGN §12.1) */}
+          {selectedTicket && isComposing && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
-              {!activeCategory ? (
-                <>
-                  {SUPPORT_CATEGORIES.map((cat) => (
-                    <button
-                      key={cat.key}
-                      type="button"
-                      onClick={() => setMenuCategory(cat.key)}
-                      style={{ ...secondaryButtonStyle, padding: "6px 10px", fontSize: 12.5 }}
-                    >
-                      {cat.label}
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={handleOther}
-                    style={{ ...secondaryButtonStyle, padding: "6px 10px", fontSize: 12.5 }}
-                  >
-                    Other
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setMenuCategory(null)}
-                    style={{ ...secondaryButtonStyle, padding: "6px 10px", fontSize: 12.5 }}
-                  >
-                    ← All topics
-                  </button>
-                  {activeCategory.questions.map((item) => (
-                    <button
-                      key={item.question}
-                      type="button"
-                      onClick={() => handleAskFaq(item)}
-                      style={{ ...secondaryButtonStyle, padding: "6px 10px", fontSize: 12.5 }}
-                    >
-                      {item.question}
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={handleOther}
-                    style={{ ...secondaryButtonStyle, padding: "6px 10px", fontSize: 12.5 }}
-                  >
-                    Other
-                  </button>
-                </>
-              )}
+              {topicPills}
             </div>
           )}
 

@@ -10,14 +10,51 @@ import {
   pageHeaderTitleStyle,
   GridIcon,
   cardPadded,
-  pillBadge,
   primaryButtonStyle,
   secondaryButtonStyle,
   backLinkStyle,
   modalOverlayStyle,
   modalCardStyle,
   AutoDismissBanner,
+  monoNumberStyle,
 } from "../styles/pop-ui";
+
+const FEATURE_LIST_CAP = 6;
+
+function CheckIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
+      <path d="M2.2 6.3 4.7 8.8 9.8 3.4" stroke="var(--vd-ink-3, #8B93A0)" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function PlanFeatureList({ features }) {
+  const [expanded, setExpanded] = useState(false);
+  const visible = expanded ? features : features.slice(0, FEATURE_LIST_CAP);
+  const hiddenCount = features.length - visible.length;
+  return (
+    <ul style={{ margin: 0, padding: 0, listStyle: "none", flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
+      {visible.map((line) => (
+        <li key={line} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#6d7175" }}>
+          <CheckIcon />
+          <span style={/^[\d]/.test(line) ? monoNumberStyle : undefined}>{line}</span>
+        </li>
+      ))}
+      {hiddenCount > 0 && (
+        <li>
+          <button
+            type="button"
+            onClick={() => setExpanded(true)}
+            style={{ background: "none", border: "none", padding: 0, fontSize: 12, color: "var(--vd-ink-3, #8B93A0)", textDecoration: "underline", cursor: "pointer" }}
+          >
+            + {hiddenCount} more
+          </button>
+        </li>
+      )}
+    </ul>
+  );
+}
 
 export const loader = async ({ request }) => {
   const { admin, session } = await authenticate.admin(request);
@@ -136,36 +173,51 @@ export default function PlansPage() {
         </div>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 14, alignItems: "stretch" }}>
         {PLAN_ORDER.map((plan) => {
           const isCurrent = plan === currentPlan;
           const featureList = getPlanFeatureList(plan);
+          const [amount, period] = PLAN_PRICES[plan].split("/");
           return (
             <div
               key={plan}
               style={{
                 ...cardPadded,
-                border: isCurrent ? "2px solid var(--vaultd-accent, #1a1a1a)" : "1px solid #e3e3e3",
+                boxShadow: isCurrent
+                  ? "0 0 0 1.5px var(--vd-ink, #14181F), 0 1px 2px rgba(20,24,31,.05)"
+                  : cardPadded.boxShadow,
                 display: "flex",
                 flexDirection: "column",
                 gap: 10,
               }}
             >
               <div>
-                {isCurrent && <span style={pillBadge("success")}>Current plan</span>}
+                {isCurrent && (
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      background: "var(--vd-subtle, #F5F6F7)",
+                      color: "var(--vd-ink-2, #5C6470)",
+                      borderRadius: 20,
+                      padding: "2px 10px",
+                      fontSize: 11.5,
+                      fontWeight: 600,
+                    }}
+                  >
+                    Current plan
+                  </span>
+                )}
               </div>
               <div style={{ fontSize: 15, fontWeight: 700, color: "#1a1a1a" }}>{PLAN_LABELS[plan]}</div>
-              <div style={{ fontSize: 20, fontWeight: 700, color: "#1a1a1a" }}>{PLAN_PRICES[plan]}</div>
-              <ul style={{ margin: 0, padding: 0, listStyle: "none", flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
-                {featureList.map((line) => (
-                  <li key={line} style={{ fontSize: 12.5, color: "#6d7175" }}>
-                    {line}
-                  </li>
-                ))}
-              </ul>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+                <span style={{ fontSize: 26, fontWeight: 600, color: "#1a1a1a", ...monoNumberStyle }}>{amount}</span>
+                {period && <span style={{ fontSize: 13, fontWeight: 400, color: "var(--vd-ink-3, #8B93A0)" }}>/ {period}</span>}
+              </div>
+              <PlanFeatureList features={featureList} />
               {isCurrent ? (
                 <button type="button" disabled style={secondaryButtonStyle}>
-                  Active
+                  Current plan
                 </button>
               ) : (
                 <button

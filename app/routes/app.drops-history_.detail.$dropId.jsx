@@ -1,5 +1,43 @@
 import { useState } from "react";
 import { useLoaderData, Link } from "react-router";
+import { monoNumberStyle } from "../styles/pop-ui";
+
+// Heatmap — un pas fixe (toujours minutes, ex.) n'a pas de sens sur un drop
+// d'1 minute (secondes) ni sur un drop de 6h (heures). VAULTD-DESIGN-emails
+// §13.5 : adapter la granularite du libelle a la duree du bucket.
+function formatBucketAxisLabel(date, bucketSeconds) {
+  if (bucketSeconds < 300) {
+    return date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  }
+  if (bucketSeconds < 10800) {
+    return date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+  }
+  return date.toLocaleTimeString("fr-FR", { hour: "2-digit" });
+}
+
+// Cherche le plus petit pas qui n'affiche jamais deux libelles identiques
+// cote a cote (un axe qui repete "23:04 / 23:04" n'apporte rien).
+function pickAxisStride(bars, bucketSeconds, maxLabels = 8) {
+  if (bars.length === 0) return 1;
+  const labels = bars.map((b) => formatBucketAxisLabel(b.start, bucketSeconds));
+  const startStride = Math.max(1, Math.ceil(bars.length / maxLabels));
+  for (let stride = startStride; stride <= bars.length; stride++) {
+    const shown = [];
+    for (let i = 0; i < bars.length; i += stride) shown.push(labels[i]);
+    const hasConsecutiveDup = shown.some((l, idx) => idx > 0 && l === shown[idx - 1]);
+    if (!hasConsecutiveDup) return stride;
+  }
+  return bars.length;
+}
+
+function ExportIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M7 1.5v7.2M7 8.7L4.2 5.9M7 8.7l2.8-2.8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M1.5 9.8v1.7a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1V9.8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
 
 function formatDuration(seconds) {
   const h = Math.floor(seconds / 3600);
@@ -322,7 +360,9 @@ export const loader = async ({ params, request }) => {
   };
 };
 
-const PRODUCT_RANK_COLORS = ["#f59e0b", "#6d7175", "#8b5cf6", "#6d7175", "#6d7175"];
+// Une seule serie mise en avant (le n°1, en accent), les autres neutres —
+// jamais de palette categorielle (VAULTD-DESIGN §13.3).
+const rankColor = (i) => (i === 0 ? "var(--vaultd-accent, #1a1a1a)" : "var(--vd-ink-3, #8B93A0)");
 
 export default function DropDetailPage() {
   const { drop, previousDrop, metrics, funnel, heatmap, productRanking } =
@@ -360,16 +400,19 @@ export default function DropDetailPage() {
       ? `${Math.round(heatmap.bucketSeconds / 60)}min`
       : `${Math.round(heatmap.bucketSeconds / 3600)}h`;
 
-  const tierColor = (itemsCount) => {
-    if (itemsCount === 0) return "#ececec";
+  // Une seule teinte (l'accent choisi dans Réglages), en dégradé d'intensité
+  // — jamais de palette catégorielle sur la data viz (VAULTD-DESIGN §13.3).
+  const tierOpacity = (itemsCount) => {
+    if (itemsCount === 0) return 0;
     const ratio = itemsCount / maxItems;
-    if (ratio >= 0.66) return "#1a1a1a";
-    if (ratio >= 0.33) return "#9aa0a6";
-    return "#dcdce0";
+    if (ratio >= 0.66) return 1;
+    if (ratio >= 0.33) return 0.55;
+    return 0.25;
   };
 
-  // n'affiche qu'une poignée de labels sous l'axe pour eviter le clutter
-  const labelEvery = Math.max(1, Math.ceil(bars.length / 8));
+  // n'affiche qu'une poignée de labels sous l'axe, sans jamais repeter deux
+  // libelles identiques cote a cote
+  const labelEvery = pickAxisStride(bars, heatmap.bucketSeconds);
 
   const [exportOpen, setExportOpen] = useState(false);
 
@@ -475,9 +518,10 @@ export default function DropDetailPage() {
   };
 
   const card = {
-    background: "#ffffff",
-    border: "1px solid #e3e3e3",
-    borderRadius: 10,
+    background: "var(--vd-card, #ffffff)",
+    border: 0,
+    borderRadius: "var(--vd-radius, 10px)",
+    boxShadow: "var(--vd-ring)",
   };
 
   const cardLabel = {
@@ -530,24 +574,17 @@ export default function DropDetailPage() {
             >
               {drop.name}
             </h1>
-            <span
-              style={{
-                background: drop.soldOut ? "#f0fdf4" : "#fff7ed",
-                color: drop.soldOut ? "#007a5a" : "#c2410c",
-                border: drop.soldOut ? "1px solid #d1fae5" : "1px solid #fed7aa",
-                borderRadius: 20,
-                padding: "2px 10px",
-                fontSize: 12,
-                fontWeight: 600,
-              }}
-            >
-              {drop.soldOut ? "Sold out" : "Partial"}
+            {/* Un drop termine est termine, epuise ou non — pas un 5e etat
+                hors systeme. Meme pastille --vd-ended, le mot fait la
+                difference (VAULTD-DESIGN §13.2). */}
+            <span className="vd-pill vd-pill--ended">
+              <span className="vd-dot" />
+              {drop.soldOut ? "Ended · sold out" : "Ended · stock remaining"}
             </span>
             <span
               style={{
                 fontSize: 11,
-                fontFamily:
-                  '"SF Mono","Fira Code",ui-monospace,Menlo,Monaco,Consolas,monospace',
+                fontFamily: "var(--vd-mono, ui-monospace, monospace)",
                 color: "#919191",
                 background: "#f2f2f2",
                 borderRadius: 4,
@@ -558,9 +595,9 @@ export default function DropDetailPage() {
             </span>
           </div>
 
-          <div style={{ display: "flex", gap: 16, marginTop: 6, fontSize: 12.5, color: "#6d7175" }}>
-            <span>📅 {dateLabel} · {timeRangeLabel}</span>
-            <span>🕐 {h}h{String(m).padStart(2, "0")}m live</span>
+          <div style={{ display: "flex", gap: 16, marginTop: 6, fontSize: 12.5, color: "#6d7175", ...monoNumberStyle }}>
+            <span>{dateLabel} · {timeRangeLabel}</span>
+            <span>{h}h{String(m).padStart(2, "0")}m live</span>
           </div>
         </div>
 
@@ -583,7 +620,8 @@ export default function DropDetailPage() {
               whiteSpace: "nowrap",
             }}
           >
-            ⬇ Export PDF / CSV
+            <ExportIcon />
+            Export
           </button>
 
           {exportOpen && (
@@ -626,97 +664,80 @@ export default function DropDetailPage() {
         </div>
       </div>
 
-      {/* BANNIÈRE D'INFO */}
+      {/* COMPTEURS WAITLIST — trois cellules, filet vertical, chiffre en
+          mono au-dessus (VAULTD-DESIGN §13.6) */}
       <div
         style={{
           ...card,
-          padding: "10px 14px",
+          padding: "12px 0",
           marginBottom: 16,
-          fontSize: 12.5,
-          color: "#6d7175",
           display: "flex",
-          alignItems: "center",
-          gap: 8,
         }}
       >
-        <span>ⓘ</span>
-        <span>
-          Percentages (%) refer to the previous drop —{" "}
-          <strong style={{ color: "#1a1a1a" }}>
-            {previousDrop ? previousDrop.name : "N/A"}
-          </strong>
-          . N/A would appear for a first drop with no reference data.
-        </span>
+        {[
+          { value: waitlistCount, label: "TOTAL WAITLIST" },
+          { value: unsubscribedCount, label: "UNSUBSCRIBED" },
+          { value: netWaitlistCount, label: "WAITLIST (NET)" },
+        ].map((cell, i) => (
+          <div
+            key={cell.label}
+            style={{
+              flex: 1,
+              textAlign: "center",
+              padding: "0 14px",
+              borderLeft: i > 0 ? "1px solid var(--vd-hairline, #e3e3e3)" : "none",
+            }}
+          >
+            <div style={{ fontSize: 18, fontWeight: 700, color: "#1a1a1a", ...monoNumberStyle }}>
+              {cell.value}
+            </div>
+            <div style={{ fontSize: 11, color: "var(--vd-ink-3, #8B93A0)", marginTop: 2 }}>
+              {cell.label}
+            </div>
+          </div>
+        ))}
       </div>
 
-      {/* WAITLIST UNSUBSCRIBE STATS */}
-      <div
-        style={{
-          ...card,
-          padding: "10px 14px",
-          marginBottom: 16,
-          fontSize: 12.5,
-          color: "#6d7175",
-          display: "flex",
-          gap: 18,
-        }}
-      >
-        <span>
-          <strong style={{ color: "#1a1a1a" }}>{waitlistCount}</strong> total waitlist
-        </span>
-        <span>
-          <strong style={{ color: "#1a1a1a" }}>{unsubscribedCount}</strong> unsubscribed
-        </span>
-        <span>
-          <strong style={{ color: "#1a1a1a" }}>{netWaitlistCount}</strong> waitlist (net)
-        </span>
-      </div>
-
-      {/* 5 KPI CARDS */}
+      {/* 5 KPI CARDS — motif standard, pas de filet colore (VAULTD-DESIGN §13.1) */}
       <div
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
           gap: 14,
-          marginBottom: 16,
+          marginBottom: 10,
         }}
       >
         {[
           {
             label: "Total revenue",
-            accent: "#6366f1",
             value: revenue.toLocaleString("en-US", { style: "currency", currency: "USD" }),
             deltaPct: revenueDeltaPct,
             sub:
               previousDrop && previousRevenue !== null
                 ? `vs ${previousRevenue.toLocaleString("en-US", { style: "currency", currency: "USD" })} (${previousDrop.name})`
-                : "N/A (1st drop)",
+                : "1st drop — nothing to compare yet",
           },
           {
             label: "Conversion rate",
-            accent: "#8b5cf6",
-            value: conversionRate !== null ? `${conversionRate.toFixed(1)}%` : "N/A",
+            value: conversionRate !== null ? `${conversionRate.toFixed(1)}%` : "—",
             deltaPct: conversionDeltaPct,
-            sub: previousConversionRate !== null ? `vs ${previousConversionRate.toFixed(1)}% (${previousDrop?.name})` : "N/A",
+            sub: previousConversionRate !== null ? `vs ${previousConversionRate.toFixed(1)}% (${previousDrop?.name})` : "—",
           },
           {
             label: "Interest rate",
-            accent: "#f59e0b",
-            value: interestRate !== null ? `${interestRate.toFixed(1)}%` : "N/A",
+            value: interestRate !== null ? `${interestRate.toFixed(1)}%` : "—",
             deltaPct: null,
             sub: `${waitlistCount} waitlist / ${visitorsTotal} visitors`,
           },
           {
             label: "Deal rate",
-            accent: "#14b8a6",
-            value: dealRate !== null ? `${dealRate.toFixed(1)}%` : "N/A",
+            value: dealRate !== null ? `${dealRate.toFixed(1)}%` : "—",
             deltaPct: null,
             sub: `${buyersCount} buyers / ${waitlistCount} waitlist`,
           },
           {
             label: "Avg cart size",
-            accent: "#ec4899",
-            value: typeof drop.finalAvgCartSize === "number" ? drop.finalAvgCartSize.toFixed(1) : "N/A",
+            value: typeof drop.finalAvgCartSize === "number" ? drop.finalAvgCartSize.toFixed(1) : "—",
             deltaPct: null,
             sub: "items/order avg",
           },
@@ -725,12 +746,11 @@ export default function DropDetailPage() {
             key={kpi.label}
             style={{
               ...card,
-              borderTop: `3px solid ${kpi.accent}`,
               padding: "14px 16px",
             }}
           >
             <div style={cardLabel}>{kpi.label}</div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: "#1a1a1a", letterSpacing: -0.6 }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: "#1a1a1a", letterSpacing: -0.6, ...monoNumberStyle }}>
               {kpi.value}
             </div>
             {kpi.deltaPct !== null && (
@@ -740,6 +760,7 @@ export default function DropDetailPage() {
                   fontWeight: 600,
                   marginTop: 3,
                   color: kpi.deltaPct >= 0 ? "#007a5a" : "#c2410c",
+                  ...monoNumberStyle,
                 }}
               >
                 {kpi.deltaPct >= 0 ? "↑ " : "↓ "}
@@ -751,6 +772,23 @@ export default function DropDetailPage() {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* BANNIÈRE D'INFO — une ligne, sous la rangée qu'elle explique, pas
+          au-dessus (VAULTD-DESIGN §13.8) */}
+      <div
+        style={{
+          fontSize: 12,
+          color: "#919191",
+          marginBottom: 16,
+        }}
+      >
+        Percentages compare against the previous drop
+        {previousDrop ? (
+          <> — <strong style={{ color: "#6d7175" }}>{previousDrop.name}</strong>.</>
+        ) : (
+          <>; this is the first drop, so there's nothing to compare yet.</>
+        )}
       </div>
 
       {/* HEATMAP + DURATION/FUNNEL */}
@@ -788,9 +826,10 @@ export default function DropDetailPage() {
                       height: 150,
                       paddingRight: 8,
                       fontSize: 10,
-                      color: "#a0a0a0",
+                      color: "var(--vd-ink-3, #8B93A0)",
                       textAlign: "right",
                       flexShrink: 0,
+                      ...monoNumberStyle,
                     }}
                   >
                     <span>{maxItems} items</span>
@@ -805,20 +844,21 @@ export default function DropDetailPage() {
                         alignItems: "flex-end",
                         gap: 3,
                         height: 150,
-                        borderLeft: "1px solid #ececec",
-                        borderBottom: "1px solid #d1d1d1",
+                        borderLeft: "1px solid var(--vd-hairline, #e3e3e3)",
+                        borderBottom: "1px solid var(--vd-hairline, #e3e3e3)",
                       }}
                     >
                       {bars.map((b, i) => (
                         <div
                           key={i}
-                          title={`${b.start.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })} · ${b.itemsCount} item${b.itemsCount === 1 ? "" : "s"}`}
+                          title={`${formatBucketAxisLabel(b.start, heatmap.bucketSeconds)} · ${b.itemsCount} item${b.itemsCount === 1 ? "" : "s"}`}
                           style={{
                             flex: 1,
                             minWidth: 0,
                             height: `${Math.max(2, (b.itemsCount / maxItems) * 100)}%`,
-                            background: tierColor(b.itemsCount),
-                            border: b.itemsCount === 0 ? "1px solid #e3e3e3" : "none",
+                            background: "var(--vaultd-accent, #1a1a1a)",
+                            opacity: tierOpacity(b.itemsCount),
+                            border: b.itemsCount === 0 ? "1px solid var(--vd-hairline, #e3e3e3)" : "none",
                             borderRadius: 2,
                           }}
                         />
@@ -826,10 +866,8 @@ export default function DropDetailPage() {
                     </div>
                     <div style={{ display: "flex", gap: 3, marginTop: 6 }}>
                       {bars.map((b, i) => (
-                        <div key={i} style={{ flex: 1, minWidth: 0, textAlign: "center", fontSize: 10, color: "#a0a0a0" }}>
-                          {i % labelEvery === 0
-                            ? b.start.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
-                            : ""}
+                        <div key={i} style={{ flex: 1, minWidth: 0, textAlign: "center", fontSize: 10, color: "var(--vd-ink-3, #8B93A0)", ...monoNumberStyle }}>
+                          {i % labelEvery === 0 ? formatBucketAxisLabel(b.start, heatmap.bucketSeconds) : ""}
                         </div>
                       ))}
                     </div>
@@ -837,9 +875,9 @@ export default function DropDetailPage() {
                 </div>
               </div>
               <div style={{ display: "flex", gap: 14, marginTop: 14, fontSize: 12, color: "#6d7175" }}>
-                <span><span style={{ display: "inline-block", width: 9, height: 9, background: "#1a1a1a", borderRadius: 2, marginRight: 5 }} />High</span>
-                <span><span style={{ display: "inline-block", width: 9, height: 9, background: "#9aa0a6", borderRadius: 2, marginRight: 5 }} />Medium</span>
-                <span><span style={{ display: "inline-block", width: 9, height: 9, background: "#dcdce0", borderRadius: 2, marginRight: 5 }} />Low</span>
+                <span><span style={{ display: "inline-block", width: 9, height: 9, background: "var(--vaultd-accent, #1a1a1a)", opacity: 0.25, borderRadius: 2, marginRight: 5 }} />Low</span>
+                <span><span style={{ display: "inline-block", width: 9, height: 9, background: "var(--vaultd-accent, #1a1a1a)", opacity: 0.6, borderRadius: 2, marginRight: 5 }} />Medium</span>
+                <span><span style={{ display: "inline-block", width: 9, height: 9, background: "var(--vaultd-accent, #1a1a1a)", opacity: 1, borderRadius: 2, marginRight: 5 }} />High</span>
               </div>
             </>
           )}
@@ -847,47 +885,23 @@ export default function DropDetailPage() {
 
         {/* DURATION + FUNNEL */}
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          {/* DURATION */}
+          {/* DURATION — une ligne mono, l'info est secondaire (VAULTD-DESIGN §13.7) */}
           <div style={{ ...card, padding: 16 }}>
             <div style={cardLabel}>Drop duration</div>
-            <div style={{ display: "flex", gap: 8, justifyContent: "center", margin: "10px 0" }}>
-              {[
-                { v: h, label: "Hours" },
-                { v: m, label: "Min" },
-                { v: s, label: "Sec" },
-              ].map((unit, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <div style={{ background: "#f4f4f5", borderRadius: 8, padding: "10px 14px", textAlign: "center" }}>
-                    <div style={{ fontSize: 20, fontWeight: 800, color: "#1a1a1a" }}>
-                      {String(unit.v).padStart(2, "0")}
-                    </div>
-                    <div style={{ fontSize: 10, color: "#919191", letterSpacing: "0.06em" }}>
-                      {unit.label.toUpperCase()}
-                    </div>
-                  </div>
-                  {i < 2 && <span style={{ color: "#c4c4c4", fontWeight: 700 }}>:</span>}
-                </div>
-              ))}
+            <div style={{ fontSize: 20, fontWeight: 700, color: "#1a1a1a", margin: "6px 0 4px", ...monoNumberStyle }}>
+              {String(h).padStart(2, "0")}:{String(m).padStart(2, "0")}:{String(s).padStart(2, "0")}
             </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <div style={{ flex: 1, background: "#f4f4f5", borderRadius: 8, padding: "8px 10px", textAlign: "center" }}>
-                <div style={{ fontSize: 10, color: "#919191", letterSpacing: "0.06em" }}>OPENED</div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "#1a1a1a" }}>{openedLabel}</div>
-              </div>
-              <div style={{ flex: 1, background: "#f4f4f5", borderRadius: 8, padding: "8px 10px", textAlign: "center" }}>
-                <div style={{ fontSize: 10, color: "#919191", letterSpacing: "0.06em" }}>CLOSED</div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "#1a1a1a" }}>{closedLabel}</div>
-              </div>
+            <div style={{ fontSize: 12, color: "var(--vd-ink-3, #8B93A0)", ...monoNumberStyle }}>
+              Opened {openedLabel} · Closed {closedLabel}
             </div>
           </div>
 
-          {/* FUNNEL */}
+          {/* FUNNEL — piste --vd-subtle, remplissage accent, "Purchased" en
+              encre (plus de vert, seule occurrence dans l'app avant ce
+              changement — VAULTD-DESIGN §13.4) */}
           <div style={{ ...card, padding: 16, flex: 1 }}>
             <div style={{ ...cardLabel, marginBottom: 12 }}>Conversion funnel</div>
-            {[
-              { key: "visitors", color: "#d8d8db" },
-              { key: "purchased", color: "#007a5a" },
-            ].map(({ key, color }) => {
+            {["visitors", "purchased"].map((key) => {
               const f = funnel[key];
               return (
                 <div key={key} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
@@ -896,15 +910,15 @@ export default function DropDetailPage() {
                       width: 84,
                       fontSize: 12.5,
                       fontWeight: key === "purchased" ? 700 : 500,
-                      color: key === "purchased" ? "#007a5a" : "#303030",
+                      color: key === "purchased" ? "#1a1a1a" : "#303030",
                     }}
                   >
                     {f.label}
                   </div>
-                  <div style={{ flex: 1, height: 8, background: "#f0f0f0", borderRadius: 999, overflow: "hidden" }}>
-                    <div style={{ width: `${f.pctOfMax}%`, height: "100%", background: color }} />
+                  <div style={{ flex: 1, height: 8, background: "var(--vd-subtle, #F5F6F7)", borderRadius: 999, overflow: "hidden" }}>
+                    <div style={{ width: `${f.pctOfMax}%`, height: "100%", background: "var(--vaultd-accent, #1a1a1a)" }} />
                   </div>
-                  <div style={{ width: 80, textAlign: "right", fontSize: 12, color: "#6d7175" }}>
+                  <div style={{ width: 80, textAlign: "right", fontSize: 12, color: "#6d7175", ...monoNumberStyle }}>
                     {f.count}
                     {f.pctOfTotal != null ? ` (${Math.round(f.pctOfTotal)}% of visitors)` : ""}
                   </div>
@@ -919,7 +933,7 @@ export default function DropDetailPage() {
       <div style={{ ...card, padding: 16 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
           <div style={cardLabel}>Most demanded — ranked by sell-out speed</div>
-          <div style={{ fontSize: 12, color: "#919191" }}>{totalItems} items total</div>
+          <div style={{ fontSize: 12, color: "#919191", ...monoNumberStyle }}>{totalItems} items total</div>
         </div>
 
         {productRanking.length === 0 ? (
@@ -937,7 +951,7 @@ export default function DropDetailPage() {
                   alignItems: "center",
                   gap: 14,
                   padding: "10px 0",
-                  borderTop: i > 0 ? "1px solid #f0f0f0" : "none",
+                  borderTop: i > 0 ? "1px solid var(--vd-hairline, #e3e3e3)" : "none",
                 }}
               >
                 <div
@@ -945,7 +959,7 @@ export default function DropDetailPage() {
                     width: 24,
                     height: 24,
                     borderRadius: "50%",
-                    background: PRODUCT_RANK_COLORS[i] ?? "#6d7175",
+                    background: rankColor(i),
                     color: "#ffffff",
                     fontSize: 12,
                     fontWeight: 700,
@@ -953,27 +967,28 @@ export default function DropDetailPage() {
                     alignItems: "center",
                     justifyContent: "center",
                     flexShrink: 0,
+                    ...monoNumberStyle,
                   }}
                 >
                   {i + 1}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13.5, fontWeight: 700, color: "#1a1a1a" }}>{p.productName}</div>
-                  <div style={{ fontSize: 12, color: "#919191" }}>
+                  <div style={{ fontSize: 12, color: "#919191", ...monoNumberStyle }}>
                     {p.selloutLabel} · {p.unitsSold} items
                   </div>
                 </div>
-                <div style={{ width: 140, height: 6, background: "#f0f0f0", borderRadius: 999, overflow: "hidden" }}>
+                <div style={{ width: 140, height: 6, background: "var(--vd-subtle, #F5F6F7)", borderRadius: 999, overflow: "hidden" }}>
                   <div
                     style={{
                       width: `${(p.revenue / maxRevenue) * 100}%`,
                       height: "100%",
-                      background: PRODUCT_RANK_COLORS[i] ?? "#6d7175",
+                      background: rankColor(i),
                     }}
                   />
                 </div>
                 <div style={{ width: 90, textAlign: "right" }}>
-                  <div style={{ fontSize: 13.5, fontWeight: 800, color: "#1a1a1a" }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 800, color: "#1a1a1a", ...monoNumberStyle }}>
                     {p.revenue.toLocaleString("en-US", { style: "currency", currency: "USD" })}
                   </div>
                   {p.revenueDeltaPct !== null && (
@@ -982,6 +997,7 @@ export default function DropDetailPage() {
                         fontSize: 11,
                         fontWeight: 600,
                         color: p.revenueDeltaPct >= 0 ? "#007a5a" : "#c2410c",
+                        ...monoNumberStyle,
                       }}
                     >
                       {p.revenueDeltaPct >= 0 ? "↑ " : "↓ "}

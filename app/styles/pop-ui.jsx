@@ -8,6 +8,47 @@ import { Link } from "react-router";
 export const popFontFamily =
   'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", sans-serif';
 
+function LockIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0, marginTop: 1 }}>
+      <rect x="3" y="6.2" width="8" height="6.3" rx="1.3" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M4.6 6.2V4.4a2.4 2.4 0 0 1 4.8 0v1.8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+// Motif "fonctionnalité verrouillée par l'offre" — à réutiliser partout où
+// un champ/reglage est indisponible sur le plan courant (VAULTD-DESIGN §9.4).
+// Rend explicite qu'il s'agit d'un verrou d'offre, pas d'un champ desactive
+// par une condition quelconque.
+export function LockedFeatureNotice({ title, minPlanLabel, description }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "flex-start",
+        gap: 8,
+        background: "var(--vd-subtle, #F5F6F7)",
+        border: "0.5px solid var(--vd-hairline, #E3E3E3)",
+        borderRadius: "var(--vd-radius-sm, 8px)",
+        padding: "12px 14px",
+        color: "var(--vd-ink-3, #8B93A0)",
+      }}
+    >
+      <LockIcon />
+      <div>
+        <div style={{ fontSize: 13, fontWeight: 500 }}>{title}</div>
+        <div style={{ fontSize: 12, marginTop: 2 }}>
+          {description ?? `Available from ${minPlanLabel}.`}{" "}
+          <Link to="/app/plans" style={{ color: "var(--vd-ink, #14181F)", textDecoration: "underline" }}>
+            View plans →
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export const highlightMarkStyle = {
   background: "color-mix(in srgb, var(--vaultd-accent, #1a1a1a) 30%, #fff8e1)",
   color: "#1a1a1a",
@@ -325,6 +366,18 @@ export const GLOBAL_POP_CSS = `
     border-color: var(--vaultd-accent, #1a1a1a) !important;
     box-shadow: 0 0 0 1px var(--vaultd-accent, #1a1a1a);
   }
+  /* Un placeholder est toujours neutre, jamais colore — colore, il se lit
+     comme une valeur saisie ou une alerte (VAULTD-DESIGN §9.3). */
+  input::placeholder, textarea::placeholder {
+    color: var(--vd-ink-3, #8B93A0);
+    opacity: 1;
+  }
+  /* Modales longues (VAULTD-DESIGN §9.1) : le filet du pied suffit a
+     indiquer qu'il y a de la suite, pas besoin d'une barre de defilement
+     large et voyante. */
+  .vd-modal-scroll {
+    scrollbar-width: thin;
+  }
   input:-webkit-autofill,
   input:-webkit-autofill:hover,
   input:-webkit-autofill:focus {
@@ -393,6 +446,14 @@ export const GLOBAL_POP_CSS = `
   /* Emails screen — clickable {{tag}} chips (VAULTD-DESIGN-emails.md 8.4) */
   .vd-tag-chip { transition: box-shadow .12s ease, background-color .12s ease; }
   .vd-tag-chip:hover { background: #ffffff !important; box-shadow: var(--vd-ring-hover); }
+
+  /* Help list — toute la ligne est cliquable (VAULTD-DESIGN §11.2) */
+  .vd-help-row { transition: background-color .12s ease; }
+  .vd-help-row:hover { background: var(--vd-subtle, #F5F6F7); }
+
+  /* Support — puces de sujet (VAULTD-DESIGN §12.2) */
+  .vd-topic-pill { transition: background-color .12s ease, border-color .12s ease; }
+  .vd-topic-pill:hover { background: var(--vd-card, #ffffff); border-color: var(--vd-ink, #14181F); }
 `;
 
 export const successBannerStyle = {

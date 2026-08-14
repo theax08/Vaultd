@@ -30,6 +30,7 @@ import {
   StatusPill,
   dropCardClassName,
   monoNumberStyle,
+  LockedFeatureNotice,
 } from "../styles/pop-ui";
 import { getAccountForShop } from "../vaultd-account.server";
 import { PLAN_LIMITS, PLAN_FEATURES, PLAN_ORDER } from "../vaultd-plans";
@@ -972,13 +973,63 @@ export default function DropsPage() {
       {/* MODALE MUTANTE : CREATE OU EDIT DROP */}
       {isEditorOpen && (
         <div style={modalOverlayStyle}>
-          <div style={modalCardStyle}>
-            <h2 style={{ fontSize: 16, fontWeight: 700, color: "var(--vaultd-accent, #1a1a1a)", margin: "0 0 16px 0" }}>
-              {editorMode === "create"
-                ? "Create a new drop"
-                : `Edit Drop: ${dropName}`}
-            </h2>
-              <Form method="post" id="drop-editor-form">
+          <div
+            style={{
+              ...modalCardStyle,
+              padding: 0,
+              display: "flex",
+              flexDirection: "column",
+              maxHeight: "85vh",
+              width: "560px",
+              overflow: "hidden",
+            }}
+          >
+            <Form
+              method="post"
+              id="drop-editor-form"
+              style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}
+            >
+              {/* EN-TÊTE FIXE */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "16px 20px",
+                  borderBottom: "1px solid var(--vd-hairline, #e3e3e3)",
+                  flexShrink: 0,
+                }}
+              >
+                <h2 style={{ fontSize: 16, fontWeight: 600, letterSpacing: "-0.01em", color: "var(--vaultd-accent, #1a1a1a)", margin: 0 }}>
+                  {editorMode === "create"
+                    ? "Create a new drop"
+                    : `Edit Drop: ${dropName}`}
+                </h2>
+                <button
+                  type="button"
+                  onClick={cancelEditor}
+                  aria-label="Close"
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: "50%",
+                    border: "none",
+                    background: "transparent",
+                    color: "#6d7175",
+                    fontSize: 16,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* CORPS SCROLLABLE */}
+              <div className="vd-modal-scroll" style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 20 }}>
                 <input
                   type="hidden"
                   name="intent"
@@ -1010,7 +1061,7 @@ export default function DropsPage() {
                   {/* DROP NAME */}
                   <div style={{ marginBottom: 14 }}>
                     <div style={{ marginBottom: 6 }}>
-                      <span style={{ fontWeight: 700, color: "var(--vaultd-accent, #1a1a1a)" }}>
+                      <span style={{ fontSize: 13, fontWeight: 500, color: "var(--vd-ink, #14181F)" }}>
                         Drop Name
                       </span>
                     </div>
@@ -1034,7 +1085,7 @@ export default function DropsPage() {
                   {/* START TIME */}
                   <div style={{ marginBottom: 14 }}>
                     <div style={{ marginBottom: 6 }}>
-                      <span style={{ fontWeight: 700, color: "var(--vaultd-accent, #1a1a1a)" }}>
+                      <span style={{ fontSize: 13, fontWeight: 500, color: "var(--vd-ink, #14181F)" }}>
                         Start time
                       </span>
                     </div>
@@ -1151,27 +1202,19 @@ export default function DropsPage() {
                         )}
                       </>
                     ) : (
-                      <div>
-                        <span style={{ fontWeight: 600, color: "#919191" }}>
-                          Auto-launch &amp; auto-close
-                        </span>
-                        <p style={{ fontSize: 12.5, color: "#919191", margin: "4px 0 0 0" }}>
-                          Available on Scale and above.{" "}
-                          <a href="/app/plans" style={{ color: "#1a1a1a", fontWeight: 600 }}>View plans →</a>
-                        </p>
-                      </div>
+                      <LockedFeatureNotice title="Auto-launch & auto-close" minPlanLabel="the Scale plan" />
                     )}
                   </div>
 
                   {/* WAITLIST LIMIT — Growth+ only */}
                   <div style={{ marginBottom: 14 }}>
-                    <div style={{ marginBottom: 6 }}>
-                      <span style={{ fontWeight: 700, color: canSetWaitlistLimit ? "var(--vaultd-accent, #1a1a1a)" : "#919191" }}>
-                        Waitlist limit
-                      </span>
-                    </div>
                     {canSetWaitlistLimit ? (
                       <>
+                        <div style={{ marginBottom: 6 }}>
+                          <span style={{ fontSize: 13, fontWeight: 500, color: "var(--vd-ink, #14181F)" }}>
+                            Waitlist limit
+                          </span>
+                        </div>
                         <input
                           name="maxWaitlistSize"
                           style={inputStyleWithError(!!errors.maxWaitlistSize)}
@@ -1192,10 +1235,7 @@ export default function DropsPage() {
                         )}
                       </>
                     ) : (
-                      <p style={{ fontSize: 12.5, color: "#919191", margin: 0 }}>
-                        Available on Growth and above.{" "}
-                        <a href="/app/plans" style={{ color: "#1a1a1a", fontWeight: 600 }}>View plans →</a>
-                      </p>
+                      <LockedFeatureNotice title="Waitlist limit" minPlanLabel="the Growth plan" />
                     )}
                   </div>
 
@@ -1210,18 +1250,18 @@ export default function DropsPage() {
                       tabIndex={-1}
                       readOnly
                     />
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        padding: "2px 0",
-                      }}
-                    >
-                      <span style={{ fontWeight: 600, color: "#1a1a1a" }}>
-                        Allow waitlist referrals
-                      </span>
-                      {canUseReferral && (
+                    {canUseReferral ? (
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          padding: "2px 0",
+                        }}
+                      >
+                        <span style={{ fontWeight: 600, color: "#1a1a1a" }}>
+                          Allow waitlist referrals
+                        </span>
                         <button
                           type="button"
                           role="switch"
@@ -1231,14 +1271,9 @@ export default function DropsPage() {
                         >
                           <span style={toggleSwitchKnobStyle(referralEnabled)} />
                         </button>
-                      )}
-                    </div>
-
-                    {!canUseReferral && (
-                      <p style={{ fontSize: 12.5, color: "#919191", margin: "4px 0 0 0" }}>
-                        Available on Pro and above.{" "}
-                        <a href="/app/plans" style={{ color: "#1a1a1a", fontWeight: 600 }}>View plans →</a>
-                      </p>
+                      </div>
+                    ) : (
+                      <LockedFeatureNotice title="Allow waitlist referrals" minPlanLabel="the Pro plan" />
                     )}
 
                     {canUseReferral && referralEnabled && (
@@ -1293,7 +1328,7 @@ export default function DropsPage() {
                   {/* SÉLECTION DES PRODUITS */}
                   <div style={{ marginBottom: 14 }}>
                     <div style={{ marginBottom: 6 }}>
-                      <span style={{ fontWeight: 700, color: "var(--vaultd-accent, #1a1a1a)" }}>
+                      <span style={{ fontSize: 13, fontWeight: 500, color: "var(--vd-ink, #14181F)" }}>
                         Select the products for the drop
                       </span>
                     </div>
@@ -1327,10 +1362,27 @@ export default function DropsPage() {
                     )}
 
                     {selectedProducts.length === 0 ? (
-                      <span style={{ color: "#6d7175" }}>
-                        No products attached yet. This drop will not
-                        appear on any page.
-                      </span>
+                      // La phrase la plus importante de la modale — bloquante,
+                      // elle doit se voir (VAULTD-DESIGN §9.5)
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "flex-start",
+                          gap: 8,
+                          background: "var(--vd-sched-bg, #FFF4DC)",
+                          color: "var(--vd-sched-fg, #7A5600)",
+                          borderRadius: "var(--vd-radius-sm, 8px)",
+                          padding: "10px 12px",
+                          fontSize: 12.5,
+                        }}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0, marginTop: 1 }}>
+                          <path d="M7 1.3 13 12H1L7 1.3Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+                          <path d="M7 5.4V8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                          <circle cx="7" cy="10" r="0.9" fill="currentColor" />
+                        </svg>
+                        <span>No products attached yet. This drop will not appear on any page.</span>
+                      </div>
                     ) : (
                       <div
                         style={{
@@ -1386,7 +1438,7 @@ export default function DropsPage() {
                   {/* DESCRIPTION */}
                   <div style={{ marginBottom: 14 }}>
                     <div style={{ marginBottom: 6 }}>
-                      <span style={{ fontWeight: 700, color: "var(--vaultd-accent, #1a1a1a)" }}>
+                      <span style={{ fontSize: 13, fontWeight: 500, color: "var(--vd-ink, #14181F)" }}>
                         Description
                       </span>
                     </div>
@@ -1403,50 +1455,56 @@ export default function DropsPage() {
                       placeholder="Short description of the drop (optional)"
                     />
                   </div>
-
-                  {/* FOOTER ACTIONS */}
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      marginTop: "8px",
-                    }}
-                  >
-                    <div style={{ display: "flex", gap: 10 }}>
-                      <button
-                        type="button"
-                        disabled={willBeCapped}
-                        style={willBeCapped ? primaryButtonDisabledStyle : primaryButtonStyle}
-                        onClick={handleSaveDrop}
-                        title={willBeCapped ? "Reduce your selection or upgrade your plan to save this drop." : undefined}
-                      >
-                        {editorMode === "create"
-                          ? "Save drop"
-                          : "Update drop"}
-                      </button>
-                      <button type="button" style={secondaryButtonStyle} onClick={cancelEditor}>
-                        Cancel
-                      </button>
-                    </div>
-
-                    {editorMode === "edit" && (
-                      <button
-                        type="button"
-                        style={destructiveTextButtonStyle}
-                        onClick={() =>
-                          triggerDeleteConfirm(
-                            currentDropId,
-                            dropName
-                          )
-                        }
-                      >
-                        Delete drop
-                      </button>
-                    )}
-                  </div>
                 </div>
-              </Form>
+              </div>
+
+              {/* PIED FIXE — secondaire a gauche, primaire a droite, alignes
+                  a droite (convention Shopify, VAULTD-DESIGN §9.6) */}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "14px 20px",
+                  borderTop: "1px solid var(--vd-hairline, #e3e3e3)",
+                  flexShrink: 0,
+                }}
+              >
+                {editorMode === "edit" ? (
+                  <button
+                    type="button"
+                    style={destructiveTextButtonStyle}
+                    onClick={() =>
+                      triggerDeleteConfirm(
+                        currentDropId,
+                        dropName
+                      )
+                    }
+                  >
+                    Delete drop
+                  </button>
+                ) : (
+                  <span />
+                )}
+
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button type="button" style={secondaryButtonStyle} onClick={cancelEditor}>
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={willBeCapped}
+                    style={willBeCapped ? primaryButtonDisabledStyle : primaryButtonStyle}
+                    onClick={handleSaveDrop}
+                    title={willBeCapped ? "Reduce your selection or upgrade your plan to save this drop." : undefined}
+                  >
+                    {editorMode === "create"
+                      ? "Save drop"
+                      : "Update drop"}
+                  </button>
+                </div>
+              </div>
+            </Form>
           </div>
         </div>
       )}
@@ -1455,13 +1513,13 @@ export default function DropsPage() {
       {isEditorOpen && isStartPickerOpen && (
         <div style={modalOverlayStyle}>
           <div style={{ ...modalCardStyle, width: "320px", zIndex: 1100 }}>
-            <h2 style={{ fontSize: 16, fontWeight: 700, color: "var(--vaultd-accent, #1a1a1a)", margin: "0 0 16px 0" }}>
+            <h2 style={{ fontSize: 16, fontWeight: 600, letterSpacing: "-0.01em", color: "var(--vaultd-accent, #1a1a1a)", margin: "0 0 16px 0" }}>
               Select start date &amp; time
             </h2>
               <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                 <div style={{ marginBottom: 14 }}>
                   <div style={{ marginBottom: 6 }}>
-                    <span style={{ fontWeight: 700, color: "var(--vaultd-accent, #1a1a1a)" }}>Date</span>
+                    <span style={{ fontSize: 13, fontWeight: 500, color: "var(--vd-ink, #14181F)" }}>Date</span>
                   </div>
                   <input
                     type="date"
@@ -1475,7 +1533,7 @@ export default function DropsPage() {
 
                 <div style={{ marginBottom: 14 }}>
                   <div style={{ marginBottom: 6 }}>
-                    <span style={{ fontWeight: 700, color: "var(--vaultd-accent, #1a1a1a)" }}>Time</span>
+                    <span style={{ fontSize: 13, fontWeight: 500, color: "var(--vd-ink, #14181F)" }}>Time</span>
                   </div>
                   <input
                     type="time"
@@ -1515,7 +1573,7 @@ export default function DropsPage() {
               borderTop: "4px solid #c2410c",
             }}
           >
-            <h2 style={{ fontSize: 16, fontWeight: 700, color: "var(--vaultd-accent, #1a1a1a)", margin: "0 0 16px 0" }}>
+            <h2 style={{ fontSize: 16, fontWeight: 600, letterSpacing: "-0.01em", color: "var(--vaultd-accent, #1a1a1a)", margin: "0 0 16px 0" }}>
               Are you absolutely sure?
             </h2>
               <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
