@@ -142,33 +142,31 @@ const NAV_LINKS = [
   { to: "/app/settings", label: "Settings" },
 ];
 
-// Tour d'intro — ce que fait chaque partie centrale de l'app, sans mention
-// de palier de plan (juste les fonctionnalites). Concis a dessein : une
-// carte pleine d'un paragraphe par etape se lit comme une corvee.
+// Tour d'intro — le workflow reel, dans l'ordre ou le marchand l'utilise
+// (creer -> brancher le widget -> activer les mails -> lancer -> consulter
+// l'historique), sans mention de palier de plan. Concis mais concret : on
+// nomme les vrais elements d'UI (Drop ID, editeur de theme, Live, Drop
+// history) plutot que de rester vague.
 const TOUR_STEPS = [
   {
     title: "Create a drop",
-    body: "Pick products, a start time, and a unit limit. Turn on auto-launch and Vaultd opens and closes it for you.",
+    body: "Pick products, a start time, and a unit limit, then hit Copy next to its Drop ID on the Drops page — you'll paste that next.",
   },
   {
-    title: "Build a waitlist",
-    body: "Customers join before it opens. Positions update live, and referrals let them move up the line.",
+    title: "Add it to your theme",
+    body: "Open your theme editor, add a Vaultd app block (waitlist form, countdown, or social proof), and paste the Drop ID into its settings to put it live on your storefront.",
   },
   {
-    title: "Go live",
-    body: "Watch sales, traffic, and remaining stock in real time from the Live dashboard while a drop runs.",
+    title: "Turn on automated emails",
+    body: "Head to Emails and activate the confirmation, position-update, and go-live automations — customers get notified without you sending a thing.",
   },
   {
-    title: "Automated emails",
-    body: "Confirmation, position updates, and access links go out on their own — nothing to send by hand.",
+    title: "Launch the drop",
+    body: "Go live (or let auto-launch do it) and watch sales, traffic, and remaining stock update in real time from the Live dashboard.",
   },
   {
-    title: "Hype widgets",
-    body: "Embed a countdown or waitlist block on your storefront so customers see it right where they shop.",
-  },
-  {
-    title: "Drop history",
-    body: "Once a drop ends, revenue, conversion, and sell-out time are logged so you can compare drops over time.",
+    title: "Check Drop history",
+    body: "Once a drop ends it's stored here with revenue, conversion, and sell-out time — filter and compare every past drop anytime.",
   },
 ];
 
