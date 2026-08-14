@@ -28,15 +28,17 @@ model Session {
 }
 
 model VaultdAccount {
-  id              String    @id @default(cuid())
-  plan            String    @default("FREE")
-  lastSeenPlan    String    @default("FREE")
-  appearanceColor String    @default("black")
-  email           String?   @unique
-  emailVerifiedAt DateTime?
-  passwordHash    String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id                       String    @id @default(cuid())
+  plan                     String    @default("FREE")
+  lastSeenPlan             String    @default("FREE")
+  appearanceColor          String    @default("black")
+  email                    String?   @unique
+  emailVerifiedAt          DateTime?
+  emailVerifyCode          String?
+  emailVerifyCodeExpiresAt DateTime?
+  passwordHash             String?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
 
   shops      ShopSettings[]
   resetCodes PasswordResetCode[]

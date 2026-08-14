@@ -52,23 +52,24 @@ async function verifyPassword(password, stored) {
   }
 }
 
-export async function sendWelcomeEmail(email, username, verifyLink) {
+export async function sendWelcomeEmail(email, username, verifyCode) {
   if (!email) return;
   await sendEmail({
     from: "Vaultd <noreply@updates.vaultd.pro>",
     to: email,
-    subject: verifyLink ? "Confirm your email for Vaultd" : "Welcome to Vaultd",
+    subject: verifyCode ? "Confirm your email for Vaultd" : "Welcome to Vaultd",
     html: `<div style="font-family:system-ui,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#0a0a0a;color:#f0f0f0;border-radius:12px">
 <p style="font-size:24px;font-weight:800;margin:0 0 16px;letter-spacing:-0.5px">Welcome to Vaultd${username ? `, ${username}` : ""}!</p>
 <p style="font-size:15px;color:#a0a0a0;margin:0 0 20px">Your account has been created. Install the Vaultd app on your Shopify store and choose a plan to get started.</p>
-${verifyLink ? `<a href="${verifyLink}" style="display:inline-block;background:#fff;color:#0a0a0a;font-weight:700;font-size:14px;padding:12px 22px;border-radius:8px;text-decoration:none;margin:0 0 20px">Confirm your email →</a>
-<p style="font-size:13px;color:#707070;margin:0 0 20px">Confirming lets us reach you for password resets and account notices. This link expires in 24 hours.</p>` : ""}
+${verifyCode ? `<p style="font-size:15px;color:#a0a0a0;margin:0 0 12px">Confirm your email with this code:</p>
+<p style="font-size:36px;font-weight:900;letter-spacing:8px;margin:0 0 16px;font-family:monospace;color:#f0f0f0">${verifyCode}</p>
+<p style="font-size:13px;color:#707070;margin:0 0 20px">Enter it in Vaultd under Settings → Account. Expires in 30 minutes.</p>` : ""}
 <p style="font-size:13px;color:#505050;margin:24px 0 0">If you didn't create this account, you can safely ignore this email.</p>
 </div>`,
   });
 }
 
-async function sendVerificationReminderEmail(email, verifyLink) {
+async function sendVerificationReminderEmail(email, verifyCode) {
   if (!email) return;
   await sendEmail({
     from: "Vaultd <noreply@updates.vaultd.pro>",
@@ -76,9 +77,9 @@ async function sendVerificationReminderEmail(email, verifyLink) {
     subject: "Confirm your email for Vaultd",
     html: `<div style="font-family:system-ui,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#0a0a0a;color:#f0f0f0;border-radius:12px">
 <p style="font-size:22px;font-weight:800;margin:0 0 16px;letter-spacing:-0.5px">Confirm your email</p>
-<p style="font-size:15px;color:#a0a0a0;margin:0 0 24px">Click below to confirm this is your email address for your Vaultd account.</p>
-<a href="${verifyLink}" style="display:inline-block;background:#fff;color:#0a0a0a;font-weight:700;font-size:14px;padding:12px 22px;border-radius:8px;text-decoration:none">Confirm your email →</a>
-<p style="font-size:12.5px;color:#606060;margin:24px 0 0">Link expires in 24 hours. If you didn't request this, you can ignore this email.</p>
+<p style="font-size:15px;color:#a0a0a0;margin:0 0 12px">Your confirmation code:</p>
+<p style="font-size:36px;font-weight:900;letter-spacing:8px;margin:0 0 16px;font-family:monospace;color:#f0f0f0">${verifyCode}</p>
+<p style="font-size:12.5px;color:#606060;margin:0 0 8px">Enter it in Vaultd under Settings → Account. Expires in 30 minutes. If you didn't request this, you can ignore this email.</p>
 </div>`,
   });
 }
@@ -157,82 +158,62 @@ export async function createAccountForShop(shopDomain, { email, password } = {})
   });
 
   if (email) {
-    sendWelcomeEmail(email, null, buildEmailVerifyLink(account.id)).catch(() => {});
+    (async () => {
+      const code = await issueVerificationCode(account.id);
+      await sendWelcomeEmail(email, null, code);
+    })().catch(() => {});
   }
 
   return { account: await getAccountForShop(shopDomain) };
 }
 
-// Renvoie le lien de confirmation a un compte qui n'a pas encore verifie son
-// email (email tape par erreur, ou premier mail jamais recu). Pas de
-// rate-limit ici : la page qui appelle ceci est deja authentifiee par
-// session Shopify, contrairement a un formulaire public.
+// Code a 6 chiffres plutot qu'un lien cliquable : un lien envoye par email se
+// fait souvent visiter automatiquement par le scanner anti-phishing du client
+// mail (Outlook Safe Links, Gmail, etc.) avant meme que le marchand ouvre le
+// message — l'email se marquerait "confirme" sans qu'il l'ait jamais vu. Un
+// code que le marchand retape lui-meme n'a pas ce probleme.
+async function issueVerificationCode(accountId) {
+  const code = crypto.randomInt(100000, 1000000).toString();
+  await db.vaultdAccount.update({
+    where: { id: accountId },
+    data: { emailVerifyCode: code, emailVerifyCodeExpiresAt: new Date(Date.now() + 30 * 60 * 1000) },
+  });
+  return code;
+}
+
+// Renvoie un nouveau code a un compte qui n'a pas encore verifie son email
+// (email tape par erreur, ou premier mail jamais recu). Pas de rate-limit
+// ici : la page qui appelle ceci est deja authentifiee par session Shopify,
+// contrairement a un formulaire public.
 export async function resendVerificationEmail(accountId) {
   const account = await db.vaultdAccount.findUnique({ where: { id: accountId } });
   if (!account?.email || account.emailVerifiedAt) return { error: "Nothing to verify." };
-  await sendVerificationReminderEmail(account.email, buildEmailVerifyLink(account.id)).catch(() => {});
+  const code = await issueVerificationCode(account.id);
+  await sendVerificationReminderEmail(account.email, code).catch(() => {});
   return { success: true };
 }
 
-export async function verifyAccountEmail(token) {
-  const payload = verifyEmailVerificationToken(token);
-  if (!payload) return { error: "This confirmation link is invalid or has expired." };
+export async function confirmAccountEmail({ accountId, code }) {
+  const trimmedCode = (code || "").toString().trim();
+  const account = await db.vaultdAccount.findUnique({ where: { id: accountId } });
+  if (!account) return { error: "Account not found." };
+  if (account.emailVerifiedAt) return { success: true };
 
-  const account = await db.vaultdAccount.findUnique({ where: { id: payload.accountId } });
-  if (!account) return { error: "This confirmation link is invalid or has expired." };
-  if (account.emailVerifiedAt) return { success: true, alreadyVerified: true };
+  if (
+    !trimmedCode ||
+    !account.emailVerifyCode ||
+    account.emailVerifyCode !== trimmedCode ||
+    !account.emailVerifyCodeExpiresAt ||
+    account.emailVerifyCodeExpiresAt < new Date()
+  ) {
+    return { error: "Invalid or expired code." };
+  }
 
   await db.vaultdAccount.update({
     where: { id: account.id },
-    data: { emailVerifiedAt: new Date() },
+    data: { emailVerifiedAt: new Date(), emailVerifyCode: null, emailVerifyCodeExpiresAt: null },
   });
   return { success: true };
-}
-
-// Lien signe (HMAC, sans stockage DB) envoye par email pour confirmer que le
-// marchand possede bien l'adresse tapee — meme approche que createLinkTicket
-// plus bas, mais avec un "kind" dans le payload pour qu'un lien de
-// confirmation ne puisse jamais etre rejoue comme un ticket de liaison
-// (ou l'inverse), meme s'ils partagent le meme secret.
-const EMAIL_VERIFY_TTL_MS = 24 * 60 * 60 * 1000;
-const EMAIL_VERIFY_SECRET = process.env.SHOPIFY_API_SECRET || "vaultd-email-verify-fallback";
-
-function signEmailVerifyPayload(payloadB64) {
-  return crypto.createHmac("sha256", EMAIL_VERIFY_SECRET).update(payloadB64).digest("base64url").slice(0, 22);
-}
-
-function createEmailVerificationToken(accountId) {
-  const exp = Date.now() + EMAIL_VERIFY_TTL_MS;
-  const payloadB64 = Buffer.from(`verify|${accountId}|${exp}`).toString("base64url");
-  return `${payloadB64}.${signEmailVerifyPayload(payloadB64)}`;
-}
-
-function verifyEmailVerificationToken(token) {
-  if (!token || !token.includes(".")) return null;
-  const [payloadB64, sig] = token.split(".");
-  const expectedSig = signEmailVerifyPayload(payloadB64);
-  const sigBuf = Buffer.from(sig || "");
-  const expectedBuf = Buffer.from(expectedSig);
-  if (sigBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(sigBuf, expectedBuf)) {
-    return null;
-  }
-
-  let kind, accountId, expStr;
-  try {
-    [kind, accountId, expStr] = Buffer.from(payloadB64, "base64url").toString().split("|");
-  } catch {
-    return null;
-  }
-  const exp = Number(expStr);
-  if (kind !== "verify" || !accountId || !exp) return null;
-  if (Date.now() > exp) return null;
-  return { accountId };
-}
-
-function buildEmailVerifyLink(accountId) {
-  const baseUrl = (process.env.SHOPIFY_APP_URL || "").replace(/\/$/, "");
-  const token = createEmailVerificationToken(accountId);
-  return `${baseUrl}/verify-email?token=${encodeURIComponent(token)}`;
 }
 
 export async function requestPasswordReset(email) {

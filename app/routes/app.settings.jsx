@@ -9,6 +9,7 @@ import {
   requestPasswordReset,
   resetPasswordWithCode,
   resendVerificationEmail,
+  confirmAccountEmail,
 } from "../vaultd-account.server";
 import { canUseColor, PLAN_SUMMARIES, COLOR_OPTIONS, PLAN_ORDER } from "../vaultd-plans";
 import {
@@ -198,6 +199,15 @@ export const action = async ({ request }) => {
     return { intent, success: true };
   }
 
+  if (intent === "confirm_email") {
+    const account = await getAccountForShop(shopDomain);
+    if (!account) return { intent, error: "Create your Vaultd account first." };
+    const code = (formData.get("code") || "").toString();
+    const result = await confirmAccountEmail({ accountId: account.id, code });
+    if (result.error) return { intent, error: result.error };
+    return { intent, success: true };
+  }
+
   if (intent === "disconnect_account") {
     await db.shopSettings.update({
       where: { shopDomain },
@@ -250,6 +260,7 @@ export default function SettingsPage() {
   const [resetCode, setResetCode] = useState("");
   const [resetNewPassword, setResetNewPassword] = useState("");
   const [resetCodeSent, setResetCodeSent] = useState(false);
+  const [verifyCode, setVerifyCode] = useState("");
   useEffect(() => {
     if (actionData?.intent === "update_bot_protection" && actionData?.success) {
       setIsSavingBotProt(false);
@@ -267,6 +278,9 @@ export default function SettingsPage() {
       setResetEmail("");
       setResetCode("");
       setResetNewPassword("");
+    }
+    if (actionData?.intent === "confirm_email" && actionData.success) {
+      setVerifyCode("");
     }
   }, [actionData]);
 
@@ -310,6 +324,11 @@ export default function SettingsPage() {
       { intent: "reset_password", email: resetEmail, code: resetCode, newPassword: resetNewPassword },
       { method: "post" }
     );
+  };
+
+  const handleConfirmEmail = (e) => {
+    e.preventDefault();
+    submit({ intent: "confirm_email", code: verifyCode }, { method: "post" });
   };
 
   const handleSetColor = (color) => {
@@ -378,7 +397,9 @@ export default function SettingsPage() {
                   actionData.intent === "reset_password"
                     ? "Password reset. You can log in with your new password."
                     : actionData.intent === "resend_verification"
-                    ? "Confirmation email sent — check your inbox."
+                    ? "Confirmation code sent — check your inbox."
+                    : actionData.intent === "confirm_email"
+                    ? "Email confirmed."
                     : "Saved."
                 }
                 dismissKey={actionData}
@@ -420,42 +441,45 @@ export default function SettingsPage() {
         <div style={sectionEyebrowStyle}>ACCOUNT</div>
 
         {!account ? (
-          <>
-            <p style={{ fontSize: 13.5, color: "#303030", margin: "0 0 14px 0" }}>
-              Create your Vaultd account to keep your plan and settings tied to
-              you, not just this store — useful if you ever manage more than
-              one store.
-            </p>
-            <form onSubmit={handleCreateAccount} style={{ display: "flex", flexDirection: "column", gap: 8, maxWidth: 320 }}>
-              <input
-                type="email"
-                required
-                value={newEmail}
-                onChange={(e) => setNewEmail(e.target.value)}
-                placeholder="Your email"
-                style={inputStyle}
-              />
-              <input
-                type="password"
-                required
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Choose a password"
-                style={inputStyle}
-              />
-              <p style={{ fontSize: 11.5, color: "#919191", margin: 0 }}>
-                Min. 8 characters, with an uppercase letter, a lowercase letter, a digit and a special character.
+          <div style={{ display: "flex", gap: 28, flexWrap: "wrap" }}>
+            <div style={{ flex: 1, minWidth: 260 }}>
+              <p style={{ fontSize: 13.5, color: "#303030", margin: "0 0 14px 0" }}>
+                Create your Vaultd account to keep your plan and settings tied to
+                you, not just this store — useful if you ever manage more than
+                one store.
               </p>
-              <button type="submit" disabled={isCreating} style={primaryButtonStyle}>
-                {isCreating ? "Creating…" : "Create your Vaultd account"}
-              </button>
-            </form>
+              <form onSubmit={handleCreateAccount} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <input
+                  type="email"
+                  required
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                  placeholder="Your email"
+                  style={inputStyle}
+                />
+                <input
+                  type="password"
+                  required
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Choose a password"
+                  style={inputStyle}
+                />
+                <p style={{ fontSize: 11.5, color: "#919191", margin: 0 }}>
+                  Min. 8 characters, with an uppercase letter, a lowercase letter, a digit and a special character.
+                </p>
+                <button type="submit" disabled={isCreating} style={primaryButtonStyle}>
+                  {isCreating ? "Creating…" : "Create your Vaultd account"}
+                </button>
+              </form>
+            </div>
 
-            <div style={{ marginTop: 18, paddingTop: 16, borderTop: "1px solid #e3e3e3" }}>
-              <p style={{ fontSize: 13, color: "#6d7175", margin: "0 0 8px 0" }}>
-                Already have a Vaultd account from another store?
+            <div style={{ flex: 1, minWidth: 260, paddingLeft: 28, borderLeft: "1px solid #e3e3e3" }}>
+              <p style={{ fontSize: 13.5, color: "#303030", margin: "0 0 14px 0" }}>
+                Already have a Vaultd account — from another store, or after
+                switching computers? Log in here.
               </p>
-              <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: 8, maxWidth: 320 }}>
+              <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 <input
                   type="text"
                   required
@@ -553,7 +577,7 @@ export default function SettingsPage() {
                 </div>
               )}
             </div>
-          </>
+          </div>
         ) : (
           <>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
@@ -565,26 +589,34 @@ export default function SettingsPage() {
             {account.email && !account.emailVerifiedAt && (
               <div
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
                   marginBottom: 14,
-                  padding: "8px 12px",
+                  padding: "10px 12px",
                   background: "#fff3cd",
                   border: "1px solid #ffc107",
                   borderRadius: 8,
                 }}
               >
-                <span style={{ fontSize: 12.5, color: "#7a5600" }}>
-                  {account.email} isn&apos;t confirmed yet. Check your inbox for the confirmation link.
-                </span>
-                <button
-                  type="button"
-                  onClick={() => submit({ intent: "resend_verification" }, { method: "post" })}
-                  style={{ background: "none", border: "none", padding: 0, fontSize: 12.5, fontWeight: 600, color: "#7a5600", textDecoration: "underline", cursor: "pointer", whiteSpace: "nowrap" }}
-                >
-                  Resend
-                </button>
+                <p style={{ fontSize: 12.5, color: "#7a5600", margin: "0 0 8px 0" }}>
+                  {account.email} isn&apos;t confirmed yet. Enter the code we emailed you.
+                </p>
+                <form onSubmit={handleConfirmEmail} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <input
+                    type="text"
+                    required
+                    value={verifyCode}
+                    onChange={(e) => setVerifyCode(e.target.value)}
+                    placeholder="6-digit code"
+                    style={{ ...inputStyle, maxWidth: 130 }}
+                  />
+                  <button type="submit" style={secondaryButtonStyle}>Confirm</button>
+                  <button
+                    type="button"
+                    onClick={() => submit({ intent: "resend_verification" }, { method: "post" })}
+                    style={{ background: "none", border: "none", padding: 0, fontSize: 12.5, fontWeight: 600, color: "#7a5600", textDecoration: "underline", cursor: "pointer", whiteSpace: "nowrap" }}
+                  >
+                    Resend code
+                  </button>
+                </form>
               </div>
             )}
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
