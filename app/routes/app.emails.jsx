@@ -661,9 +661,21 @@ export default function EmailsPage() {
   // ---- Envoyer un test — destinataire modifiable, drop d'aperçu obligatoire ----
   const [testEmail, setTestEmail] = useState(accountEmail || "");
   const canSendTest = Boolean(previewDropQuery);
+  // Bouton reste cliquable meme bloque : un disabled silencieux donnait
+  // l'impression que le clic ne faisait rien du tout (et n'expliquait pas
+  // pourquoi aucun email n'arrivait).
+  const [blockedTest, setBlockedTest] = useState(null); // { type, message }
 
   const handleSendTest = (type) => {
-    if (!canSendTest) return;
+    if (!canSendTest) {
+      setBlockedTest({ type, message: "Choose a preview drop above first." });
+      return;
+    }
+    if (!testEmail.trim()) {
+      setBlockedTest({ type, message: "Enter an email address to send the test to." });
+      return;
+    }
+    setBlockedTest(null);
     testFetcher.submit(
       {
         intent: "SEND_TEST",
@@ -870,10 +882,15 @@ export default function EmailsPage() {
                             testFetcher.state !== "idle" &&
                             testFetcher.formData?.get("type") === type
                           }
-                          canSendTest={canSendTest}
                           testEmail={testEmail}
                           onTestEmailChange={setTestEmail}
-                          testResult={testFetcher.data?.type === type ? testFetcher.data : null}
+                          testResult={
+                            blockedTest?.type === type
+                              ? { error: blockedTest.message }
+                              : testFetcher.data?.type === type
+                              ? testFetcher.data
+                              : null
+                          }
                         />
                       ) : (
                         <button
@@ -1084,9 +1101,22 @@ function MagnifyIcon() {
 
 function PreviewPanel({ subject, html, isLoading, previewMode, setPreviewMode }) {
   const [isZoomed, setIsZoomed] = useState(false);
+  // Hauteur reelle du contenu, mesuree dans l'iframe une fois chargee — un
+  // gabarit fixe (ex. 900px) laisse un grand vide sous un e-mail plus court
+  // (allow-same-origin sans allow-scripts : lecture du DOM permise, aucun
+  // script ne peut s'executer — le HTML genere n'en contient de toute facon pas).
+  const [contentHeight, setContentHeight] = useState(500);
+  const handleFrameLoad = (e) => {
+    try {
+      const doc = e.target.contentDocument;
+      const h = doc?.documentElement?.scrollHeight || doc?.body?.scrollHeight;
+      if (h) setContentHeight(h);
+    } catch {}
+  };
+
   const PANEL_W = 300;
   const frameW = previewMode === "mobile" ? 375 : 640;
-  const frameH = 900;
+  const frameH = contentHeight;
   const scale = PANEL_W / frameW;
 
   return (
@@ -1149,9 +1179,11 @@ function PreviewPanel({ subject, html, isLoading, previewMode, setPreviewMode })
         <div style={{ width: "100%", height: "100%", overflow: "hidden", borderRadius: 8 }}>
           {html && (
             <iframe
+              key={frameW}
               srcDoc={html}
               title="Email preview"
-              sandbox=""
+              sandbox="allow-same-origin"
+              onLoad={handleFrameLoad}
               style={{ width: frameW, height: frameH, border: "none", transform: `scale(${scale})`, transformOrigin: "top left" }}
             />
           )}
@@ -1235,8 +1267,8 @@ function PreviewPanel({ subject, html, isLoading, previewMode, setPreviewMode })
               <iframe
                 srcDoc={html}
                 title="Email preview — large"
-                sandbox=""
-                style={{ width: frameW, maxWidth: "100%", height: 1300, border: "none", display: "block" }}
+                sandbox="allow-same-origin"
+                style={{ width: frameW, maxWidth: "100%", height: contentHeight, border: "none", display: "block" }}
               />
             </div>
           </div>
@@ -1265,7 +1297,6 @@ function AutomationEditor({
   onToggleActive,
   onSendTest,
   isSendingTest,
-  canSendTest,
   testEmail,
   onTestEmailChange,
   testResult,
@@ -1397,7 +1428,7 @@ function AutomationEditor({
           </div>
         )}
 
-        <div style={{ marginTop: 20, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+        <div style={{ marginTop: 20, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <input
               type="email"
@@ -1408,31 +1439,24 @@ function AutomationEditor({
             />
             <button
               type="button"
-              disabled={isSendingTest || !canSendTest}
+              disabled={isSendingTest}
               onClick={onSendTest}
-              style={
-                isSendingTest || !canSendTest
-                  ? { ...secondaryButtonStyle, opacity: 0.5, cursor: "default" }
-                  : secondaryButtonStyle
-              }
+              style={isSendingTest ? { ...secondaryButtonStyle, opacity: 0.6, cursor: "default" } : secondaryButtonStyle}
             >
               {isSendingTest ? "Sending…" : "Send a test"}
             </button>
           </div>
-          {!canSendTest && (
-            <span style={{ fontSize: 11.5, color: "#919191" }}>
-              Choose a preview drop above to send a test.
-            </span>
-          )}
+          {/* Retour visible, pas juste un mot en petit gris — sinon un clic
+              bloque (ou reussi) donne l'impression de n'avoir rien fait. */}
           {testResult?.success && (
-            <span style={{ fontSize: 11.5, color: "#007a5a", fontWeight: 600 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 600, color: "#007a5a", background: "#f0fdf4", border: "1px solid #d1fae5", borderRadius: 8, padding: "6px 12px" }}>
               ✓ Test sent to {testResult.to}
-            </span>
+            </div>
           )}
           {testResult?.error && (
-            <span style={{ fontSize: 11.5, color: "#c2410c", fontWeight: 600 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 600, color: "#c2410c", background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 8, padding: "6px 12px" }}>
               {testResult.error}
-            </span>
+            </div>
           )}
         </div>
       </div>

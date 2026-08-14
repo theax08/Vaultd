@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Link, redirect, useLoaderData } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
@@ -141,6 +142,133 @@ const NAV_LINKS = [
   { to: "/app/settings", label: "Settings" },
 ];
 
+// Tour d'intro — ce que fait chaque partie centrale de l'app, sans mention
+// de palier de plan (juste les fonctionnalites). Concis a dessein : une
+// carte pleine d'un paragraphe par etape se lit comme une corvee.
+const TOUR_STEPS = [
+  {
+    title: "Create a drop",
+    body: "Pick products, a start time, and a unit limit. Turn on auto-launch and Vaultd opens and closes it for you.",
+  },
+  {
+    title: "Build a waitlist",
+    body: "Customers join before it opens. Positions update live, and referrals let them move up the line.",
+  },
+  {
+    title: "Go live",
+    body: "Watch sales, traffic, and remaining stock in real time from the Live dashboard while a drop runs.",
+  },
+  {
+    title: "Automated emails",
+    body: "Confirmation, position updates, and access links go out on their own — nothing to send by hand.",
+  },
+  {
+    title: "Hype widgets",
+    body: "Embed a countdown or waitlist block on your storefront so customers see it right where they shop.",
+  },
+  {
+    title: "Drop history",
+    body: "Once a drop ends, revenue, conversion, and sell-out time are logged so you can compare drops over time.",
+  },
+];
+
+function HomeTour({ onDismiss }) {
+  const [step, setStep] = useState(0);
+  const isLast = step === TOUR_STEPS.length - 1;
+  const current = TOUR_STEPS[step];
+
+  return (
+    <div style={{ ...cardPadded, marginTop: 16 }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--vd-ink-3, #8B93A0)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 8 }}>
+            Getting started · {step + 1} / {TOUR_STEPS.length}
+          </div>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 6 }}>
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                color: "#ffffff",
+                background: "var(--vd-ink, #14181F)",
+                borderRadius: "50%",
+                width: 18,
+                height: 18,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              {step + 1}
+            </span>
+            <span style={{ fontSize: 14.5, fontWeight: 700, color: "#1a1a1a" }}>{current.title}</span>
+          </div>
+          <p style={{ fontSize: 13, color: "#6d7175", margin: 0, lineHeight: 1.5, maxWidth: 560 }}>
+            {current.body}
+          </p>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+          <button
+            type="button"
+            onClick={() => setStep((s) => Math.max(0, s - 1))}
+            disabled={step === 0}
+            aria-label="Previous"
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: "50%",
+              border: "1px solid var(--vd-hairline, #e3e3e3)",
+              background: "#fff",
+              color: step === 0 ? "#c9cccf" : "#1a1a1a",
+              cursor: step === 0 ? "default" : "pointer",
+            }}
+          >
+            ←
+          </button>
+          {!isLast ? (
+            <button
+              type="button"
+              onClick={() => setStep((s) => Math.min(TOUR_STEPS.length - 1, s + 1))}
+              aria-label="Next"
+              style={{
+                width: 30,
+                height: 30,
+                borderRadius: "50%",
+                border: "1px solid var(--vd-hairline, #e3e3e3)",
+                background: "#fff",
+                color: "#1a1a1a",
+                cursor: "pointer",
+              }}
+            >
+              →
+            </button>
+          ) : (
+            <button type="button" onClick={onDismiss} style={primaryButtonStyle}>
+              Got it
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 5, marginTop: 14 }}>
+        {TOUR_STEPS.map((s, i) => (
+          <span
+            key={s.title}
+            style={{
+              height: 3,
+              flex: 1,
+              borderRadius: 2,
+              background: i <= step ? "var(--vd-ink, #14181F)" : "var(--vd-hairline, #e3e3e3)",
+            }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const { stats, steps, recentDrops, plan, features, hasNewFeatures, hasScheduledDropWithNoActiveEmails } = useLoaderData();
 
@@ -149,6 +277,23 @@ export default function Dashboard() {
   const setupComplete = completedSteps === steps.length;
   const planSummary = PLAN_SUMMARIES[plan];
   const visibleNavLinks = NAV_LINKS.filter((link) => !link.feature || features.includes(link.feature));
+
+  // null tant qu'on n'a pas lu le localStorage (evite un flash au premier
+  // rendu serveur, qui ne peut pas savoir si le marchand l'a deja fermee).
+  const [tourVisible, setTourVisible] = useState(null);
+  useEffect(() => {
+    try {
+      setTourVisible(localStorage.getItem("vaultd:home-tour-dismissed") !== "true");
+    } catch {
+      setTourVisible(true);
+    }
+  }, []);
+  const dismissTour = () => {
+    try {
+      localStorage.setItem("vaultd:home-tour-dismissed", "true");
+    } catch {}
+    setTourVisible(false);
+  };
 
   return (
     <div style={pagePopStyle}>
@@ -365,6 +510,8 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {tourVisible && <HomeTour onDismiss={dismissTour} />}
     </div>
   );
 }

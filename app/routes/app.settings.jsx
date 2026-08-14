@@ -722,13 +722,21 @@ export default function SettingsPage() {
         {(() => {
           const previewOpt = COLOR_OPTIONS.find((o) => o.key === previewColorKey) ?? COLOR_OPTIONS[0];
           return (
-            <div style={{ marginTop: 18, paddingTop: 16, borderTop: "1px solid var(--vd-hairline, #e3e3e3)", display: "flex", alignItems: "center", gap: 16 }}>
-              <button type="button" style={{ ...primaryButtonStyle, background: previewOpt.hex }}>
-                Create drop
-              </button>
-              <a href="#preview" onClick={(e) => e.preventDefault()} style={{ color: previewOpt.hex, fontWeight: 600, fontSize: 13 }}>
-                View plans →
-              </a>
+            <div style={{ marginTop: 18, paddingTop: 16, borderTop: "1px solid var(--vd-hairline, #e3e3e3)" }}>
+              <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--vd-ink-3, #8B93A0)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 8 }}>
+                Preview — not clickable
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                <span
+                  aria-hidden="true"
+                  style={{ ...primaryButtonStyle, background: previewOpt.hex, pointerEvents: "none", cursor: "default" }}
+                >
+                  Create drop
+                </span>
+                <span aria-hidden="true" style={{ color: previewOpt.hex, fontWeight: 600, fontSize: 13, pointerEvents: "none", cursor: "default" }}>
+                  View plans →
+                </span>
+              </div>
             </div>
           );
         })()}
