@@ -3,7 +3,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
 import { authenticate } from "../shopify.server";
 import { getAccountForShop } from "../vaultd-account.server";
-import { COLOR_OPTIONS, PLAN_FEATURES, PLAN_ORDER } from "../vaultd-plans";
+import { COLOR_OPTIONS, PLAN_FEATURES } from "../vaultd-plans";
 import { hasUnreadOwnerReplies } from "../support.server";
 import { GLOBAL_POP_CSS } from "../styles/pop-ui";
 
@@ -17,27 +17,21 @@ export const loader = async ({ request }) => {
 
   let account = null;
   let hasSupportUnread = false;
-  let accountDbReady = false;
   try {
     account = await getAccountForShop(session.shop);
-    accountDbReady = true;
   } catch {}
   try {
     hasSupportUnread = await hasUnreadOwnerReplies(session.shop);
   } catch {}
 
   const plan = account?.plan ?? null;
-  const hasPlan = !accountDbReady || PLAN_ORDER.includes(plan);
   const features = PLAN_FEATURES[plan] ?? [];
 
   return {
     apiKey: process.env.SHOPIFY_API_KEY || "",
     accentColor: ACCENT_HEX[account?.appearanceColor] || ACCENT_HEX.black,
-    hasNewFeatures: account ? account.lastSeenPlan !== account.plan : false,
     features,
     hasSupportUnread,
-    needsOnboarding: accountDbReady && !account,
-    hasPlan,
   };
 };
 

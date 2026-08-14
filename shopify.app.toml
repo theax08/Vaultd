@@ -33,7 +33,13 @@ api_version = "2026-07"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "read_orders,write_metaobject_definitions,write_metaobjects,write_products"
+# read_orders: required for the orders/create webhook (drop revenue stats).
+# read_products: product/inventory lookups when creating a drop and resolving
+# a live drop's product handle. Nothing in this app ever writes products,
+# metaobjects, or metaobject definitions — those write scopes were requested
+# but never used, which needlessly widens what the install consent screen
+# asks for.
+scopes = "read_orders,read_products"
 
 [auth]
 redirect_urls = [
