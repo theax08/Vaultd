@@ -14,10 +14,16 @@ import crypto from "node:crypto";
 // le client secret de l'app, encode en hex.
 export function verifyAppProxySignature(url) {
   const signature = url.searchParams.get("signature");
-  if (!signature) return false;
+  if (!signature) {
+    console.warn("[app-proxy] rejected: no signature param", url.pathname, url.searchParams.get("shop"));
+    return false;
+  }
 
   const secret = process.env.SHOPIFY_API_SECRET;
-  if (!secret) return false;
+  if (!secret) {
+    console.error("[app-proxy] rejected: SHOPIFY_API_SECRET not set");
+    return false;
+  }
 
   const grouped = new Map();
   for (const [key, value] of url.searchParams.entries()) {
@@ -34,6 +40,9 @@ export function verifyAppProxySignature(url) {
 
   const sigBuf = Buffer.from(signature);
   const computedBuf = Buffer.from(computed);
-  if (sigBuf.length !== computedBuf.length) return false;
-  return crypto.timingSafeEqual(sigBuf, computedBuf);
+  const valid = sigBuf.length === computedBuf.length && crypto.timingSafeEqual(sigBuf, computedBuf);
+  if (!valid) {
+    console.warn("[app-proxy] rejected: signature mismatch", url.pathname, url.searchParams.get("shop"));
+  }
+  return valid;
 }
