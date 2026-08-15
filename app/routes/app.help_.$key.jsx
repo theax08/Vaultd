@@ -25,7 +25,10 @@ export const loader = async ({ request, params }) => {
 
   const unlocked = PLAN_ORDER.indexOf(section.minPlan) <= PLAN_ORDER.indexOf(plan);
 
-  return { section, unlocked };
+  // Le detail (tips) d'une section verrouillee ne doit pas etre lisible en
+  // naviguant directement vers son URL — seul le teaser (titre/intro, deja
+  // visible sur la liste) doit sortir du loader dans ce cas.
+  return { section: unlocked ? section : { ...section, tips: [] }, unlocked };
 };
 
 export default function HelpDetailPage() {
@@ -57,14 +60,18 @@ export default function HelpDetailPage() {
 
           <p style={{ fontSize: 13.5, color: "#303030", margin: "0 0 20px 0", lineHeight: 1.6 }}>{section.intro}</p>
 
-          <div style={cardLabel}>TIPS</div>
-          <ul style={{ margin: "8px 0 0 0", paddingLeft: 18, display: "flex", flexDirection: "column", gap: 8 }}>
-            {section.tips.map((tip, i) => (
-              <li key={i} style={{ fontSize: 13, color: "#303030" }}>
-                {tip}
-              </li>
-            ))}
-          </ul>
+          {unlocked && (
+            <>
+              <div style={cardLabel}>TIPS</div>
+              <ul style={{ margin: "8px 0 0 0", paddingLeft: 18, display: "flex", flexDirection: "column", gap: 8 }}>
+                {section.tips.map((tip, i) => (
+                  <li key={i} style={{ fontSize: 13, color: "#303030" }}>
+                    {tip}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
         </div>
       </div>
     </div>

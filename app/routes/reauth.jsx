@@ -6,12 +6,20 @@
 // HTML response that navigates window.top to the Shopify OAuth install URL,
 // forcing a full OAuth flow (not Token Exchange) → fresh token with billing
 // permissions.
+// Un shop qui ne matche pas ce format pourrait rediriger window.top vers un
+// domaine arbitraire (open redirect) et, pire, un `shop` contenant
+// "</script>" casserait hors du <script> ci-dessous (l'HTML est parse avant
+// le JS : la sequence litterale </script> ferme la balise meme a l'interieur
+// d'une string JS) pour injecter du HTML/JS arbitraire sur le domaine
+// vaultd.pro — un XSS reflechi classique.
+const SHOP_DOMAIN_RE = /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/i;
+
 export const loader = async ({ request }) => {
   const url = new URL(request.url);
   const shop = url.searchParams.get("shop");
 
-  if (!shop) {
-    throw new Response("Missing shop parameter", { status: 400 });
+  if (!shop || !SHOP_DOMAIN_RE.test(shop)) {
+    throw new Response("Missing or invalid shop parameter", { status: 400 });
   }
 
   const apiKey = process.env.SHOPIFY_API_KEY || "";

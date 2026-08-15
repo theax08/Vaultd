@@ -41,18 +41,24 @@ function extractTicketId(toAddresses) {
 export const action = async ({ request }) => {
   const rawBody = await request.text();
 
-  // Verification de signature Svix (whsec_...) si le secret est configure.
-  if (INBOUND_SECRET) {
-    const wh = new Webhook(INBOUND_SECRET);
-    try {
-      wh.verify(rawBody, {
-        "svix-id": request.headers.get("svix-id") ?? "",
-        "svix-timestamp": request.headers.get("svix-timestamp") ?? "",
-        "svix-signature": request.headers.get("svix-signature") ?? "",
-      });
-    } catch {
-      return new Response("Unauthorized", { status: 401 });
-    }
+  // Sans secret configure, on refuse tout plutot que d'accepter la requete
+  // sans verification — sinon n'importe qui peut poster un faux payload et
+  // injecter une "reponse officielle Vaultd" dans le ticket de support de
+  // n'importe quel marchand (usurpation via le domaine de confiance).
+  if (!INBOUND_SECRET) {
+    console.error("[inbound-email] INBOUND_WEBHOOK_SECRET not set, rejecting");
+    return new Response("Unauthorized", { status: 401 });
+  }
+
+  const wh = new Webhook(INBOUND_SECRET);
+  try {
+    wh.verify(rawBody, {
+      "svix-id": request.headers.get("svix-id") ?? "",
+      "svix-timestamp": request.headers.get("svix-timestamp") ?? "",
+      "svix-signature": request.headers.get("svix-signature") ?? "",
+    });
+  } catch {
+    return new Response("Unauthorized", { status: 401 });
   }
 
   let payload;

@@ -45,8 +45,12 @@ export const loader = async ({ request }) => {
       // The ticket only proves the credentials were checked earlier — it
       // does not prove the add-on charge was actually approved. Confirm
       // with Shopify that this shop's add-on subscription is genuinely
-      // active before linking.
+      // active before linking. A verification failure (expired token,
+      // network hiccup) must NOT be treated as confirmed — that would link
+      // (and unlock) a paid multi-store slot for free with no real billing
+      // check, same bug class already fixed in app_.billing.return.jsx.
       let addonConfirmed = false;
+      let verificationFailed = false;
       try {
         const { admin } = await unauthenticated.admin(shop);
         const res = await admin.graphql(
@@ -55,13 +59,16 @@ export const loader = async ({ request }) => {
         const { data } = await res.json();
         const subs = data?.currentAppInstallation?.activeSubscriptions ?? [];
         addonConfirmed = subs.some((s) => s.name === STORE_ADDON_LABEL && s.status === "ACTIVE");
-      } catch {
-        // Token/network hiccup — trust the ticket, matching
-        // app_.billing.return.jsx's same fallback for the main plan flow.
-        addonConfirmed = true;
+      } catch (err) {
+        console.error("[billing/link-return] addon verification failed for", shop, err?.message ?? err);
+        verificationFailed = true;
       }
 
-      if (addonConfirmed) {
+      if (verificationFailed) {
+        // No "retry" state wired up in app.settings.jsx's banner — reuse
+        // "error", whose message ("please try again") is accurate here too.
+        status = "error";
+      } else if (addonConfirmed) {
         const result = await linkShopToAccount({
           accountId: payload.targetAccountId,
           shopDomain: shop,

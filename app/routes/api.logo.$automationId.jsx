@@ -8,12 +8,15 @@ import db from "../db.server";
 // logoUrl est stocke tel quel depuis le formulaire (app.emails.jsx) — sans
 // cette liste blanche, un Content-Type arbitraire (ex: text/html) pourrait
 // etre reflete tel quel sur cette route publique et non authentifiee.
+// SVG volontairement exclu : un SVG peut contenir du <script> qui s'execute
+// si l'URL est ouverte directement dans un navigateur (pas seulement dans un
+// <img> d'email) — un marchand pourrait s'en servir pour du XSS stocke sur
+// le domaine vaultd.pro.
 const ALLOWED_LOGO_MIME_TYPES = new Set([
   "image/png",
   "image/jpeg",
   "image/gif",
   "image/webp",
-  "image/svg+xml",
 ]);
 
 export const loader = async ({ params }) => {
