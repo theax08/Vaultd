@@ -8,6 +8,12 @@ import { checkBotProtection } from "../bot-protection.server";
 import { getAccountForShop } from "../vaultd-account.server";
 import { PLAN_ORDER, PLAN_FEATURES } from "../vaultd-plans";
 
+// Un parrainage qui fait bondir quelqu'un de 100 places decale tout le monde
+// entre les deux d'exactement 1 cran — sans seuil, ca notifie potentiellement
+// des dizaines de gens pour un mouvement d'1 place qui ne veut rien dire
+// pour eux. On ne prevdefinit que les changements de plusieurs places.
+const POSITION_CHANGE_NOTIFY_THRESHOLD = 3;
+
 export const action = async ({ request }) => {
   try {
     const formData = await request.formData();
@@ -179,7 +185,9 @@ export const action = async ({ request }) => {
           console.error("waitlist: failed to update lastPosition for entry", e.id, err);
         }
 
-        const positionChanged = previousPosition != null && currentPosition !== previousPosition;
+        const positionChanged =
+          previousPosition != null &&
+          Math.abs(currentPosition - previousPosition) >= POSITION_CHANGE_NOTIFY_THRESHOLD;
         if (positionChanged && rankUpdateAutomation && rankUpdateAutomation.active && rankUpdateFeatureActive && e.email) {
           try {
             await sendWaitlistRankUpdateEmail({
