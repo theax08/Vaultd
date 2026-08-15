@@ -7,6 +7,7 @@ import { useState } from "react";
 import { useLoaderData, useActionData, useSubmit, Form } from "react-router";
 import db from "../db.server";
 import { addOwnerReplyToTicket } from "../support.server";
+import { isValidAdminSecret } from "../admin-auth.server";
 import {
   pagePopStyle,
   pageHeaderTitleStyle,
@@ -21,8 +22,7 @@ import {
 import { PLAN_ORDER } from "../vaultd-plans";
 
 function checkKey(url) {
-  const provided = url.searchParams.get("key");
-  return Boolean(process.env.ADMIN_SUPPORT_SECRET) && provided === process.env.ADMIN_SUPPORT_SECRET;
+  return isValidAdminSecret(url.searchParams.get("key"));
 }
 
 export const loader = async ({ request }) => {

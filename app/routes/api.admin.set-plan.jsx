@@ -1,10 +1,10 @@
 import db from "../db.server";
+import { isValidAdminSecret } from "../admin-auth.server";
 
 const VALID_PLANS = ["FREE", "GROWTH", "PRO", "SCALE", "ELITE"];
 
 export const action = async ({ request }) => {
-  const secret = request.headers.get("x-admin-secret");
-  if (!secret || secret !== process.env.ADMIN_SUPPORT_SECRET) {
+  if (!isValidAdminSecret(request.headers.get("x-admin-secret"))) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 

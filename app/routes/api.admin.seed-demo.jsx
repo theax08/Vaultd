@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import db from "../db.server";
+import { isValidAdminSecret } from "../admin-auth.server";
 
 const SEED_DOMAIN = "seed.vaultd.dev";
 
@@ -26,8 +27,7 @@ const TRAFFIC_SOURCES = [
 ];
 
 export const action = async ({ request }) => {
-  const secret = request.headers.get("x-admin-secret");
-  if (!secret || secret !== process.env.ADMIN_SUPPORT_SECRET) {
+  if (!isValidAdminSecret(request.headers.get("x-admin-secret"))) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
