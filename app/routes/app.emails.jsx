@@ -454,7 +454,7 @@ const CONFIG_BY_TYPE = {
   },
   [TYPES.WAITLIST_RANK_UPDATE]: {
     title: "Rank update",
-    description: "Sent when a customer moves up in the waitlist (position improves).",
+    description: "Sent when a customer moves up or down in the waitlist (position changes).",
     meta: ["{{drop_name}}", "{{position}}", "{{brand_name}}"],
   },
   [TYPES.DROP_LIVE]: {

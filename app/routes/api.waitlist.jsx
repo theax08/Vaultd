@@ -150,7 +150,9 @@ export const action = async ({ request }) => {
     const position = entries.findIndex((e) => e.email === email) + 1;
 
     // 4bis) Un nouveau parrainage peut changer le classement des autres.
-    // On recalcule et on notifie ceux qui montent.
+    // On recalcule et on notifie tous ceux dont la position a change, dans
+    // les deux sens — le template gere deja l'affichage monte/descend
+    // (fleche verte/rouge), seul l'envoi etait restreint aux montees.
     const rankUpdateAutomation = await db.emailAutomation.findFirst({
       where: { shopDomain: drop.shopDomain, type: "WAITLIST_RANK_UPDATE" },
     });
@@ -170,8 +172,8 @@ export const action = async ({ request }) => {
           console.error("waitlist: failed to update lastPosition for entry", e.id, err);
         }
 
-        const movedUp = previousPosition != null && currentPosition < previousPosition;
-        if (movedUp && rankUpdateAutomation && rankUpdateAutomation.active && rankUpdateFeatureActive && e.email) {
+        const positionChanged = previousPosition != null && currentPosition !== previousPosition;
+        if (positionChanged && rankUpdateAutomation && rankUpdateAutomation.active && rankUpdateFeatureActive && e.email) {
           try {
             await sendWaitlistRankUpdateEmail({
               to: e.email,
