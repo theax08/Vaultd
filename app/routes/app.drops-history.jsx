@@ -176,7 +176,10 @@ export const loader = async ({ request }) => {
         : "PARTIAL";
 
     return {
-      raw: drop,
+      // Seuls startTime/createdAt sont utilises cote client (tri) — ne pas
+      // renvoyer le drop entier, ca embarquerait aussi waitlistEntries/orders
+      // (emails et noms de clients) dans la reponse pour rien.
+      raw: { startTime: drop.startTime, createdAt: drop.createdAt },
       id: drop.id,
       displayId: drop.externalId ?? drop.id,
       name: drop.name,
@@ -192,7 +195,6 @@ export const loader = async ({ request }) => {
       conversionRate: convRateLabel,
       waitlistCount,
       buyersCount,
-      opacity075: drop.name.toLowerCase().includes("beta"),
       revenueDelta: null,
       revenueDeltaPrefix: null,
       conversionDelta: null,
@@ -1050,7 +1052,6 @@ export default function DropsHistoryPage() {
             alignItems: "center",
             gap: 16,
             transition: "border-color 0.15s ease",
-            opacity: drop.opacity075 ? 0.75 : 1,
           };
 
           return (

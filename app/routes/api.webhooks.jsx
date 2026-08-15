@@ -18,6 +18,16 @@ export const action = async ({ request }) => {
       await db.waitlistEntry.deleteMany({
         where: { email, drop: { shopDomain: shop } },
       });
+      // DropOrder.customerEmail (populated from webhooks.orders.create.jsx)
+      // was never touched by this handler — the customer's email survived
+      // redaction indefinitely in a shop's order history. Anonymize rather
+      // than delete the row: the aggregate revenue/item-count stats it
+      // feeds into Drop History are legitimate business records, only the
+      // PII needs to go.
+      await db.dropOrder.updateMany({
+        where: { shopDomain: shop, customerEmail: email },
+        data: { customerEmail: null },
+      });
     }
   }
 

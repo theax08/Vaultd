@@ -155,8 +155,13 @@ export const action = async ({ request }) => {
   // cap before the merchant submits (create/update caps it again server-side).
   if (intent === "compute_units") {
     const productIds = (formData.get("productIds") || "").toString().trim();
-    const totalUnits = await computeTotalInventory(admin, productIds);
-    return { intent, totalUnits };
+    try {
+      const totalUnits = await computeTotalInventory(admin, productIds);
+      return { intent, totalUnits };
+    } catch (err) {
+      console.error("compute_units: failed to fetch inventory", err);
+      return { intent, totalUnits: null, error: "Could not fetch product inventory. Try again." };
+    }
   }
 
   // --- TRAITEMENT LOGIQUE : CREATE OU UPDATE ---
@@ -246,7 +251,29 @@ export const action = async ({ request }) => {
 
     // Stock reel disponible pour les produits selectionnes (somme du
     // totalInventory Shopify), pour ne jamais afficher un faux "0 left".
-    let maxUnits = await computeTotalInventory(admin, productIds);
+    // Un echec ici doit bloquer la sauvegarde, pas silencieusement
+    // enregistrer maxUnits:0 (le drop paraitrait vendu/epuise des sa creation).
+    let maxUnits;
+    try {
+      maxUnits = await computeTotalInventory(admin, productIds);
+    } catch (err) {
+      console.error("drops: failed to fetch inventory for", productIds, err);
+      return {
+        intent,
+        errors: { productIds: "Could not fetch product inventory from Shopify. Try again.*" },
+        values: {
+          id: dropId,
+          name,
+          startTime: startTimeRaw,
+          description,
+          productIds,
+          autoLaunch,
+          maxWaitlistSize: maxWaitlistSizeRaw,
+          referralEnabled,
+          referralPointsPerShare,
+        },
+      };
+    }
 
     const account = await getAccountForShop(shopDomain);
     const plan = PLAN_ORDER.includes(account?.plan) ? account.plan : null;
@@ -492,27 +519,26 @@ async function computeTotalInventory(admin, productIds) {
 
   if (ids.length === 0) return 0;
 
-  try {
-    const response = await admin.graphql(
-      `#graphql
-        query DropProductsInventory($ids: [ID!]!) {
-          nodes(ids: $ids) {
-            ... on Product {
-              totalInventory
-            }
+  // Ne PAS avaler les erreurs ici en retournant 0 — un blip reseau/GraphQL
+  // sauvegarderait silencieusement un drop avec maxUnits:0 (vendu/epuise des
+  // sa creation). Les deux appelants attrapent l'erreur eux-memes et
+  // affichent un vrai message plutot que de laisser passer un stock a zero.
+  const response = await admin.graphql(
+    `#graphql
+      query DropProductsInventory($ids: [ID!]!) {
+        nodes(ids: $ids) {
+          ... on Product {
+            totalInventory
           }
-        }`,
-      { variables: { ids } }
-    );
-    const { data } = await response.json();
-    return (data?.nodes || []).reduce(
-      (sum, node) => sum + (node?.totalInventory || 0),
-      0
-    );
-  } catch (err) {
-    console.error("computeTotalInventory: failed to fetch inventory", err);
-    return 0;
-  }
+        }
+      }`,
+    { variables: { ids } }
+  );
+  const { data } = await response.json();
+  return (data?.nodes || []).reduce(
+    (sum, node) => sum + (node?.totalInventory || 0),
+    0
+  );
 }
 
 // Helper pour externalId

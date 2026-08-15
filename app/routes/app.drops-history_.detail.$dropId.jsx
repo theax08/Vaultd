@@ -326,8 +326,13 @@ export const loader = async ({ params, request }) => {
     };
   });
 
+  // waitlistCount/unsubscribed counts above already read everything needed
+  // from waitlistEntries — the raw array (customer emails/names) has no use
+  // on the client and shouldn't ship in the response.
+  const { waitlistEntries: _waitlistEntries, ...dropWithoutEntries } = drop;
+
   return {
-    drop,
+    drop: dropWithoutEntries,
     previousDrop,
     metrics: {
       revenue,
@@ -438,7 +443,7 @@ export default function DropDetailPage() {
       ["Total items", totalItems],
       [],
       ["Funnel step", "Count", "% of visitors"],
-      ...Object.values(funnel).map((f) => [f.label, f.count, Math.round(f.pctOfTotal)]),
+      ...Object.values(funnel).map((f) => [f.label, f.count, f.pctOfTotal != null ? Math.round(f.pctOfTotal) : ""]),
       [],
       ["Rank", "Product", "Units sold", "Revenue", "Sell-out"],
       ...productRanking.map((p, i) => [i + 1, p.productName, p.unitsSold, p.revenue, p.selloutLabel]),
@@ -492,7 +497,7 @@ export default function DropDetailPage() {
 
     addLine("Conversion funnel", 13, true);
     Object.values(funnel).forEach((f) => {
-      addLine(`${f.label}: ${f.count} (${Math.round(f.pctOfTotal)}%)`);
+      addLine(`${f.label}: ${f.count}${f.pctOfTotal != null ? ` (${Math.round(f.pctOfTotal)}%)` : ""}`);
     });
     y += 4;
 
