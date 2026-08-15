@@ -347,12 +347,31 @@
       }
     }
 
+    // Le formulaire vit dans une mise en page a 2 colonnes (texte a gauche,
+    // formulaire a largeur fixe a droite). Cacher juste le heading/sous-titre
+    // laissait la colonne de texte vide mais toujours presente dans le flex
+    // layout, ce qui poussait le contenu de succes/live dans la colonne
+    // fixe de droite au lieu de rester centre — d'ou le decalage/retrecissement
+    // observe. On cache la colonne entiere et on laisse l'autre prendre
+    // toute la largeur pour retrouver un bloc centre, meme taille que les
+    // autres widgets (countdown, social proof).
+    function collapseToSingleColumn() {
+      const textColEl = document.querySelector('.waitlist-text-col-' + id);
+      const formColEl = document.querySelector('.waitlist-form-col-' + id);
+      if (textColEl) textColEl.style.display = 'none';
+      if (formColEl) {
+        formColEl.style.flex = '1 1 100%';
+        formColEl.style.maxWidth = 'none';
+      }
+    }
+
     function showSuccess(rank, referralCode) {
       if (form) form.style.display = 'none';
       const headingEl = document.querySelector('.waitlist-heading-' + id);
       const subheadingEl = document.querySelector('.waitlist-subheading-' + id);
       if (headingEl) headingEl.style.display = 'none';
       if (subheadingEl) subheadingEl.style.display = 'none';
+      collapseToSingleColumn();
       if (!successEl) return;
       successEl.style.display = 'block';
       const positionEl = successEl.querySelector('.waitlist-success-position-' + id);
@@ -429,6 +448,7 @@
       if (successEl) successEl.style.display = 'none';
       if (headingEl2) headingEl2.style.display = 'none';
       if (subheadingEl2) subheadingEl2.style.display = 'none';
+      collapseToSingleColumn();
       if (liveLinkEl) {
         liveLinkEl.href = productHandle ? '/products/' + productHandle : '/';
       }

@@ -172,6 +172,21 @@
     let targetTime = null;
     let intervalId = null;
 
+    // Sans drop actif, le widget se cache sur une vraie boutique (voulu —
+    // rien a annoncer). Mais dans l'editeur de theme, ca laisse le bloc
+    // completement vide : rien a montrer au marchand qui parcourt les app
+    // blocks, et le panneau "Ajouter une section" de Shopify affiche
+    // "Aucun apercu disponible" faute de contenu rendu. On affiche donc un
+    // exemple statique uniquement en design mode.
+    const isDesignMode = Boolean(window.Shopify && window.Shopify.designMode);
+
+    function showExample() {
+      daysEl.textContent = '02';
+      hoursEl.textContent = '14';
+      minEl.textContent = '32';
+      card.hidden = false;
+    }
+
     function pad(n) {
       return String(Math.max(0, n)).padStart(2, '0');
     }
@@ -197,7 +212,7 @@
 
     function applyDrop(drop) {
       if (!drop || !drop.startTime) {
-        card.hidden = true;
+        if (isDesignMode) showExample(); else card.hidden = true;
         return;
       }
       targetTime = new Date(drop.startTime);
@@ -215,14 +230,14 @@
         if (shop) qs.set('shop', shop);
         const res = await fetch('/apps/hype/api/drop-status?' + qs.toString());
         if (!res.ok) {
-          card.hidden = true;
+          if (isDesignMode) showExample(); else card.hidden = true;
           return;
         }
         const data = await res.json();
         applyDrop(data.drop);
       } catch (e) {
         console.error('[countdown] failed to load drop status', e);
-        card.hidden = true;
+        if (isDesignMode) showExample(); else card.hidden = true;
       }
     }
 

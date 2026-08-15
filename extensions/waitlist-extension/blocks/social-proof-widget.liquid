@@ -169,6 +169,33 @@
 
     const avatarColors = ['#8b5cf6', '#ec4899', '#06b6d4', '#22c55e', '#f97316', '#ef4444'];
 
+    // Sans drop actif, le widget se cache sur une vraie boutique (voulu —
+    // rien a annoncer). Mais dans l'editeur de theme, ca laisse le bloc
+    // completement vide : rien a montrer au marchand qui parcourt les app
+    // blocks, et le panneau "Ajouter une section" de Shopify affiche
+    // "Aucun apercu disponible" faute de contenu rendu. On affiche donc un
+    // exemple statique uniquement en design mode, adapte au design choisi.
+    const isDesignMode = Boolean(window.Shopify && window.Shopify.designMode);
+
+    function showExample() {
+      card.hidden = false;
+      countEls.forEach(function(el) { el.textContent = (2847).toLocaleString(); });
+      if (design === 'avatars') {
+        renderAvatars(['A', 'M', 'J', 'S']);
+        if (avatarsEl) {
+          const moreSpan = document.createElement('span');
+          moreSpan.className = 'sp-avatar-more-{{ block.id }}';
+          moreSpan.textContent = '+2,843';
+          avatarsEl.appendChild(moreSpan);
+        }
+      }
+      if (design === 'progress') {
+        if (fillEl) fillEl.style.width = '72%';
+        if (capacityEl) capacityEl.textContent = '72%';
+        if (spotsEl) spotsEl.textContent = 'Only 788 spots left';
+      }
+    }
+
     function renderAvatars(initials) {
       if (!avatarsEl) return;
       avatarsEl.innerHTML = '';
@@ -183,7 +210,7 @@
 
     function applyStats(data) {
       if (!data || !data.drop) {
-        card.hidden = true;
+        if (isDesignMode) showExample(); else card.hidden = true;
         return;
       }
       card.hidden = false;
@@ -206,7 +233,7 @@
       if (design === 'progress') {
         if (data.capacityPct == null) {
           // Pas de limite de waitlist configuree sur ce drop : la barre n'a pas de sens.
-          card.hidden = true;
+          if (isDesignMode) showExample(); else card.hidden = true;
           return;
         }
         if (fillEl) fillEl.style.width = data.capacityPct + '%';
@@ -224,14 +251,14 @@
         if (shop) qs.set('shop', shop);
         const res = await fetch('/apps/hype/api/drop-status?' + qs.toString());
         if (!res.ok) {
-          card.hidden = true;
+          if (isDesignMode) showExample(); else card.hidden = true;
           return;
         }
         const data = await res.json();
         applyStats(data);
       } catch (e) {
         console.error('[social-proof] failed to load stats', e);
-        card.hidden = true;
+        if (isDesignMode) showExample(); else card.hidden = true;
       }
     }
 
