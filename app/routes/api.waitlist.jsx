@@ -40,13 +40,20 @@ export const action = async ({ request }) => {
     // Un marchand sans plan actif (jamais paye, ou desabonne) ne doit plus
     // pouvoir collecter des inscriptions ni declencher d'envois d'email —
     // sinon la fonctionnalite continue de tourner gratuitement indefiniment.
+    // Un echec de lookup (blip DB) ne doit pas etre traite comme "pas de
+    // plan" — sinon une panne transitoire coupe les inscriptions de TOUTES
+    // les boutiques payantes, pas juste bloquer les non-payantes (l'effet
+    // recherche). On ne bloque que quand le lookup a reussi et confirme
+    // clairement l'absence de plan.
     let account = null;
+    let accountLookupFailed = false;
     try {
       account = await getAccountForShop(drop.shopDomain);
     } catch (err) {
       console.error("waitlist: account lookup failed", drop.shopDomain, err);
+      accountLookupFailed = true;
     }
-    if (!PLAN_ORDER.includes(account?.plan)) {
+    if (!accountLookupFailed && !PLAN_ORDER.includes(account?.plan)) {
       console.warn("waitlist: rejected, no active plan", drop.shopDomain);
       return jsonError("This waitlist is not currently accepting signups", 403);
     }
@@ -57,7 +64,7 @@ export const action = async ({ request }) => {
     // plutot que de faire confiance a cette valeur figee. Un marchand qui
     // redescend sous PRO voit le parrainage se desactiver immediatement sur
     // tous ses drops, sans avoir besoin de les rouvrir un par un.
-    const referralActive = Boolean(drop.referralEnabled) && (PLAN_FEATURES[account.plan] ?? []).includes("referral");
+    const referralActive = Boolean(drop.referralEnabled) && (PLAN_FEATURES[account?.plan] ?? []).includes("referral");
 
     // WAITLIST_RANK_UPDATE est une automation PRO+ ("automated_emails") —
     // WAITLIST_CONFIRMATION est deja couverte par le check "plan actif"
@@ -65,7 +72,7 @@ export const action = async ({ request }) => {
     // Sans ce check, la ligne EmailAutomation cree par defaut (active:true)
     // des la premiere sauvegarde de la page Emails l'envoyait aussi pour un
     // marchand GROWTH qui n'a jamais paye PRO.
-    const rankUpdateFeatureActive = (PLAN_FEATURES[account.plan] ?? []).includes("automated_emails");
+    const rankUpdateFeatureActive = (PLAN_FEATURES[account?.plan] ?? []).includes("automated_emails");
 
     // Honeypot / timing / rate-limit (toujours actifs) + Turnstile (si
     // active par le marchand). On reste volontairement vague dans la

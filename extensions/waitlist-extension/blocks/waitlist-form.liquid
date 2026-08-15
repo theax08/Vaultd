@@ -366,6 +366,12 @@
     }
 
     function showSuccess(rank, referralCode) {
+      // Le poll de statut live (toutes les 20s) peut basculer en showLive()
+      // pendant qu'une inscription est encore en vol — sans ce guard, le
+      // POST qui reussit ensuite affiche success EN PLUS de live (les deux
+      // blocs visibles en meme temps), pile au moment ou le drop vient de
+      // passer live.
+      if (liveShown) return;
       if (form) form.style.display = 'none';
       const headingEl = document.querySelector('.waitlist-heading-' + id);
       const subheadingEl = document.querySelector('.waitlist-subheading-' + id);

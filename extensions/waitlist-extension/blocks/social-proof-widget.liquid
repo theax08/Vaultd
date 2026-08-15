@@ -262,9 +262,27 @@
       }
     }
 
+    // document.querySelector prend toujours le PREMIER waitlist-block de la
+    // page — sur une page avec plusieurs drops/produits (donc plusieurs
+    // formulaires waitlist), cliquer le social proof du drop B faisait
+    // defiler vers le formulaire du drop A. On prend plutot le plus proche
+    // dans l'ordre du DOM (le suivant si il y en a un, sinon le precedent).
+    function findNearestWaitlistForm() {
+      const all = document.querySelectorAll('[class*="waitlist-block-"]');
+      let before = null;
+      for (let i = 0; i < all.length; i++) {
+        const el = all[i];
+        if (card.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING) {
+          return el;
+        }
+        before = el;
+      }
+      return before;
+    }
+
     if (linkToWaitlist) {
       card.addEventListener('click', function() {
-        const target = document.querySelector('[class*="waitlist-block-"]');
+        const target = findNearestWaitlistForm();
         if (target) {
           target.scrollIntoView({ behavior: 'smooth', block: 'center' });
           const input = target.querySelector('input[type="email"]');

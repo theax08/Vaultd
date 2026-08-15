@@ -21,7 +21,12 @@ async function runForAllShops(request) {
 
   const results = {};
   for (const { shopDomain } of activeDrops) {
-    results[shopDomain] = await runAutoDropLifecycle(shopDomain);
+    try {
+      results[shopDomain] = await runAutoDropLifecycle(shopDomain);
+    } catch (err) {
+      console.error("cron/drop-lifecycle: failed for shop", shopDomain, err);
+      results[shopDomain] = { error: true };
+    }
   }
 
   return Response.json({ ok: true, checkedShops: activeDrops.length, results });

@@ -45,7 +45,20 @@ async function notifyWaitlist(drop, type) {
   // des la premiere sauvegarde de la page — meme pour juste changer le nom
   // de marque. Sans ce check, un marchand GROWTH qui n'a jamais paye PRO
   // recevait quand meme ces envois des qu'un drop passait live/se cloturait.
-  const account = await getAccountForShop(drop.shopDomain);
+  //
+  // Ce lookup est dans un try/catch : notifyWaitlist tourne APRES que le
+  // drop soit deja passe LIVE/ENDED en base (launchDrop/endDrop), et est
+  // appelee depuis des boucles (autoLaunchDueDrops, le cron multi-boutiques)
+  // qui n'attrapaient rien elles-memes — une erreur ici remontait et
+  // interrompait le traitement des AUTRES drops/boutiques du meme passage,
+  // pas juste l'envoi d'email de celui-ci.
+  let account = null;
+  try {
+    account = await getAccountForShop(drop.shopDomain);
+  } catch (err) {
+    console.error("notifyWaitlist: account lookup failed", drop.shopDomain, err);
+    return;
+  }
   if (!(PLAN_FEATURES[account?.plan] ?? []).includes("automated_emails")) return;
 
   const entries = await db.waitlistEntry.findMany({
@@ -224,7 +237,11 @@ export async function autoLaunchDueDrops(shopDomain) {
   });
 
   for (const drop of dueDrops) {
-    await launchDrop(drop);
+    try {
+      await launchDrop(drop);
+    } catch (err) {
+      console.error("autoLaunchDueDrops: failed to launch drop", drop.id, err);
+    }
   }
 
   return dueDrops;
@@ -264,8 +281,12 @@ export async function autoEndSoldOutDrops(shopDomain) {
 
     const elapsedMs = now.getTime() - soldOutAt.getTime();
     if (elapsedMs >= AUTO_END_GRACE_MS) {
-      await endDrop(drop);
-      ended.push(drop.id);
+      try {
+        await endDrop(drop);
+        ended.push(drop.id);
+      } catch (err) {
+        console.error("autoEndSoldOutDrops: failed to end drop", drop.id, err);
+      }
     }
   }
 
