@@ -1,10 +1,16 @@
 import { getShopSettings } from "../bot-protection.server";
+import { verifyAppProxySignature } from "../verify-app-proxy.server";
 
 // Public, appele depuis le storefront via l'app proxy. Ne renvoie jamais la
 // cle secrete -- seulement si la protection est active et la cle publique
 // (site key) necessaire pour afficher le widget Turnstile.
 export const loader = async ({ request }) => {
   const url = new URL(request.url);
+
+  if (!verifyAppProxySignature(url)) {
+    return Response.json({ enabled: false, siteKey: null }, { status: 401 });
+  }
+
   const shopDomain = (url.searchParams.get("shop") || "").trim();
 
   if (!shopDomain) {

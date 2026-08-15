@@ -7,6 +7,7 @@ import { buildUnsubscribeUrl, buildLogoUrl } from "../unsubscribe.server";
 import { checkBotProtection } from "../bot-protection.server";
 import { getAccountForShop } from "../vaultd-account.server";
 import { PLAN_ORDER, PLAN_FEATURES } from "../vaultd-plans";
+import { verifyAppProxySignature } from "../verify-app-proxy.server";
 
 // Un parrainage qui fait bondir quelqu'un de 100 places decale tout le monde
 // entre les deux d'exactement 1 cran — sans seuil, ca notifie potentiellement
@@ -16,6 +17,11 @@ const POSITION_CHANGE_NOTIFY_THRESHOLD = 3;
 
 export const action = async ({ request }) => {
   try {
+    const url = new URL(request.url);
+    if (!verifyAppProxySignature(url)) {
+      return jsonError("Unauthorized", 401);
+    }
+
     const formData = await request.formData();
 
     const email = (formData.get("email") || "").toString().trim().toLowerCase();

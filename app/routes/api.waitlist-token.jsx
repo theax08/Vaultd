@@ -1,4 +1,5 @@
 import { createWaitlistToken } from "../waitlist-token.server";
+import { verifyAppProxySignature } from "../verify-app-proxy.server";
 
 // Public, appele depuis le storefront via l'app proxy au chargement de la
 // page (voir waitlist-form.liquid). Emet un jeton signe que le widget
@@ -6,6 +7,11 @@ import { createWaitlistToken } from "../waitlist-token.server";
 // notre serveur avant l'envoi, au lieu d'un timestamp en clair falsifiable.
 export const loader = async ({ request }) => {
   const url = new URL(request.url);
+
+  if (!verifyAppProxySignature(url)) {
+    return Response.json({ token: null }, { status: 401 });
+  }
+
   const shopDomain = (url.searchParams.get("shop") || "").trim();
 
   if (!shopDomain) {

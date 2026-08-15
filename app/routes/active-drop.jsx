@@ -1,9 +1,15 @@
 import db from "../db.server";
+import { verifyAppProxySignature } from "../verify-app-proxy.server";
 
 // Fallback public, utilise par les widgets storefront quand aucun Drop ID
 // n'est configure manuellement dans l'editeur de theme.
 export const loader = async ({ request }) => {
   const url = new URL(request.url);
+
+  if (!verifyAppProxySignature(url)) {
+    return Response.json({ drop: null }, { status: 401 });
+  }
+
   const shopDomain = (url.searchParams.get("shop") || "").trim();
 
   if (!shopDomain) {

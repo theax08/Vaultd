@@ -1,4 +1,5 @@
 import db from "../db.server";
+import { verifyAppProxySignature } from "../verify-app-proxy.server";
 
 const KNOWN_SOURCES = new Set([
   "instagram",
@@ -14,6 +15,11 @@ const KNOWN_SOURCES = new Set([
 // ce endpoint, la table DropTrafficSource n'etait jamais ecrite nulle part.
 export const action = async ({ request }) => {
   try {
+    const url = new URL(request.url);
+    if (!verifyAppProxySignature(url)) {
+      return new Response(JSON.stringify({ success: false }), { status: 401 });
+    }
+
     const formData = await request.formData();
     const externalDropId = (formData.get("dropId") || "").toString().trim();
     let source = (formData.get("source") || "other").toString().trim();

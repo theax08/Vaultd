@@ -244,11 +244,10 @@
 
     async function fetchStats() {
       try {
-        const params = new URLSearchParams(window.location.search);
-        const shop = params.get('shop') || (window.Shopify && window.Shopify.shop) || '';
+        // Pas de ?shop= : Shopify l'ajoute deja lui-meme (signe) au proxy —
+        // en rajouter un autre cote client casserait la verification de signature.
         const qs = new URLSearchParams();
         if (staticDropId) qs.set('dropId', staticDropId);
-        if (shop) qs.set('shop', shop);
         const res = await fetch('/apps/hype/api/drop-status?' + qs.toString());
         if (!res.ok) {
           if (isDesignMode) showExample(); else card.hidden = true;

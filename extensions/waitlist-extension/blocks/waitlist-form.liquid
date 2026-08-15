@@ -219,11 +219,10 @@
     // longtemps garde un jeton valide au moment de l'envoi.
     let waitlistTokenReady = fetchWaitlistToken();
     function fetchWaitlistToken() {
-      const params = new URLSearchParams(window.location.search);
-      const shop = params.get('shop') || (window.Shopify && window.Shopify.shop) || '';
-      const qs = new URLSearchParams();
-      if (shop) qs.set('shop', shop);
-      return fetch('/apps/hype/api/waitlist-token?' + qs.toString())
+      // Pas de ?shop= ici : Shopify l'ajoute deja lui-meme (signe) au proxy
+      // /apps/hype/... — en rajouter un autre cote client creerait un
+      // parametre en double et casserait la verification de signature.
+      return fetch('/apps/hype/api/waitlist-token')
         .then(function(res) { return res.ok ? res.json() : null; })
         .then(function(data) {
           if (data && data.token && wlTokenEl) wlTokenEl.value = data.token;
@@ -234,11 +233,8 @@
 
     (async function loadBotProtection() {
       try {
-        const params = new URLSearchParams(window.location.search);
-        const shop = params.get('shop') || (window.Shopify && window.Shopify.shop) || '';
-        const qs = new URLSearchParams();
-        if (shop) qs.set('shop', shop);
-        const res = await fetch('/apps/hype/api/bot-protection-settings?' + qs.toString());
+        // Pas de ?shop= ici non plus, meme raison que fetchWaitlistToken.
+        const res = await fetch('/apps/hype/api/bot-protection-settings');
         if (!res.ok) return;
         const data = await res.json();
         if (!data.enabled || !data.siteKey || !turnstileContainer) return;

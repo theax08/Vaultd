@@ -2,6 +2,7 @@ import db from "../db.server";
 import { unauthenticated } from "../shopify.server";
 import { getAccountForShop } from "../vaultd-account.server";
 import { PLAN_FEATURES } from "../vaultd-plans";
+import { verifyAppProxySignature } from "../verify-app-proxy.server";
 
 // Lecture seule, publique (appelee depuis le storefront via l'app proxy).
 // Sert a la fois le widget countdown et le widget social proof, pour ne
@@ -26,6 +27,11 @@ function cacheKey(shopDomain, externalDropId) {
 
 export const loader = async ({ request }) => {
   const url = new URL(request.url);
+
+  if (!verifyAppProxySignature(url)) {
+    return jsonError("Unauthorized", 401);
+  }
+
   const shopDomain = (url.searchParams.get("shop") || "").trim();
   const externalDropId = (url.searchParams.get("dropId") || "").trim();
 
