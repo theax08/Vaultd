@@ -90,15 +90,33 @@ function boxRow(boxes) {
     </table>`;
 }
 
+// mainColor est un <input type="color"> libre (n'importe quel hex, y
+// compris blanc/pastel) — brandColor sert de fond a des blocs dont le texte
+// etait fixe en blanc/gris clair pour un fond sombre. Sans ca, un marchand
+// qui choisit une couleur claire rend ce texte illisible. Repli sur du texte
+// sombre quand le fond est clair ; hex non standard (3/4/8 chiffres,
+// invalide) traite comme sombre, ce qui garde le comportement d'avant pour
+// ces cas plutot que de risquer une mauvaise lecture de couleur.
+function isLightColor(hex) {
+  const clean = String(hex || "").replace("#", "");
+  if (!/^[0-9a-fA-F]{6}$/.test(clean)) return false;
+  const r = parseInt(clean.slice(0, 2), 16);
+  const g = parseInt(clean.slice(2, 4), 16);
+  const b = parseInt(clean.slice(4, 6), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.6;
+}
+
 function darkBanner(leftHtml, rightHtml, brandColor) {
+  const light = isLightColor(brandColor);
   return `
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 16px 0; background-color: ${escapeHtml(brandColor || "#111111")}; border-radius: 10px;">
       <tr>
         <td style="padding: 12px 16px;">
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
             <tr>
-              <td align="left" style="color: #ffffff; font-size: 13px; font-weight: 700;">${leftHtml}</td>
-              <td align="right" style="color: #d0d0d0; font-size: 12px;">${rightHtml}</td>
+              <td align="left" style="color: ${light ? "#111111" : "#ffffff"}; font-size: 13px; font-weight: 700;">${leftHtml}</td>
+              <td align="right" style="color: ${light ? "#444444" : "#d0d0d0"}; font-size: 12px;">${rightHtml}</td>
             </tr>
           </table>
         </td>
@@ -113,11 +131,12 @@ function ctaButton(href, label, brandColor) {
   // (le padding s'additionne au 100% au lieu de venir de l'interieur). Le
   // <td align="center"> + display:block suffit a occuper toute la largeur
   // disponible sans ce bug.
+  const light = isLightColor(brandColor);
   return `
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 8px 0 16px 0; table-layout: fixed;">
       <tr>
         <td align="center" style="padding: 0;">
-          <a href="${escapeHtml(href)}" style="display: block; box-sizing: border-box; text-align: center; text-decoration: none; background-color: ${escapeHtml(brandColor || "#1a1a1a")}; color: #ffffff; font-size: 14px; font-weight: 600; padding: 14px 16px; border-radius: 8px;">
+          <a href="${escapeHtml(href)}" style="display: block; box-sizing: border-box; text-align: center; text-decoration: none; background-color: ${escapeHtml(brandColor || "#1a1a1a")}; color: ${light ? "#111111" : "#ffffff"}; font-size: 14px; font-weight: 600; padding: 14px 16px; border-radius: 8px;">
             ${escapeHtml(label)}
           </a>
         </td>
@@ -352,11 +371,11 @@ export function renderDropEndedEmail({
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 16px 0; background-color: ${escapeHtml(brandColor || "#111111")}; border-radius: 10px;">
       <tr>
         <td style="padding: 16px 16px 18px 16px;">
-          <div style="font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #9aa0a6; margin-bottom: 6px;">Coming next</div>
-          <div style="font-size: 16px; font-weight: 700; color: #ffffff; margin-bottom: 4px;">
+          <div style="font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: ${isLightColor(brandColor) ? "#555555" : "#9aa0a6"}; margin-bottom: 6px;">Coming next</div>
+          <div style="font-size: 16px; font-weight: 700; color: ${isLightColor(brandColor) ? "#111111" : "#ffffff"}; margin-bottom: 4px;">
             ${nextDropName ? escapeHtml(nextDropName) + " is loading." : "Stay tuned for our next drop."}
           </div>
-          <div style="font-size: 13px; color: #d0d0d0; margin-bottom: ${nextDropCtaUrl ? "12" : "0"}px;">
+          <div style="font-size: 13px; color: ${isLightColor(brandColor) ? "#444444" : "#d0d0d0"}; margin-bottom: ${nextDropCtaUrl ? "12" : "0"}px;">
             Be first on the list — the waitlist opens soon.
           </div>
           ${
