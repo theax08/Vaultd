@@ -1,4 +1,4 @@
-import { sendEmail } from "./email-provider.server";
+import { sendEmail, buildFromHeader } from "./email-provider.server";
 import {
   renderTemplate,
   renderWaitlistConfirmationEmail,
@@ -32,7 +32,7 @@ export async function sendWaitlistConfirmationEmail({
     unsubscribeUrl,
   });
 
-  await sendEmail({ to, subject: renderTemplate(subject, vars), html });
+  await sendEmail({ to, subject: renderTemplate(subject, vars), html, from: buildFromHeader(boutiqueName) });
 }
 
 /**
@@ -62,7 +62,7 @@ export async function sendWaitlistRankUpdateEmail({
     unsubscribeUrl,
   });
 
-  await sendEmail({ to, subject: renderTemplate(subject, vars), html });
+  await sendEmail({ to, subject: renderTemplate(subject, vars), html, from: buildFromHeader(boutiqueName) });
 }
 
 /**
@@ -100,7 +100,7 @@ export async function sendDropLiveEmail({
     unsubscribeUrl,
   });
 
-  await sendEmail({ to, subject: renderTemplate(subject, vars), html });
+  await sendEmail({ to, subject: renderTemplate(subject, vars), html, from: buildFromHeader(boutiqueName) });
 }
 
 /**
@@ -140,5 +140,5 @@ export async function sendDropEndedEmail({
     unsubscribeUrl,
   });
 
-  await sendEmail({ to, subject: renderTemplate(subject, vars), html });
+  await sendEmail({ to, subject: renderTemplate(subject, vars), html, from: buildFromHeader(boutiqueName) });
 }

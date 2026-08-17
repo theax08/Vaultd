@@ -13,6 +13,36 @@ function getResendClient() {
   return resend;
 }
 
+function extractFromAddress(raw) {
+  const match = /<([^>]+)>/.exec(raw || "");
+  return match ? match[1] : raw;
+}
+
+// Nom d'affichage personnalise par boutique ("Ma Boutique" plutot que
+// "Vaultd Drops" pour tout le monde), adresse d'envoi toujours fixe sur le
+// domaine verifie Resend (EMAIL_FROM) — RFC 5322 accepte "Nom <adresse>",
+// donc le client mail affiche le nom de la boutique sans que le marchand
+// ait besoin de verifier son propre domaine.
+//
+// boutiqueName vient d'un champ que le marchand controle lui-meme
+// (brandName) — jamais utilise tel quel dans un header email : un retour a
+// la ligne permettrait d'injecter un header arbitraire (ex: Bcc), et un
+// `<`/`>` casserait le format "Nom <adresse>" pour y glisser une autre
+// adresse a la place de la notre.
+export function buildFromHeader(boutiqueName) {
+  const baseAddress = extractFromAddress(process.env.EMAIL_FROM) || "no-reply@vaultd.app";
+  const cleanName = (boutiqueName || "")
+    .replace(/[\r\n]/g, " ")
+    .replace(/[<>"]/g, "")
+    .trim()
+    .slice(0, 78);
+
+  if (!cleanName) {
+    return process.env.EMAIL_FROM || baseAddress;
+  }
+  return `${cleanName} <${baseAddress}>`;
+}
+
 /**
  * Envoie un email HTML de base
  * @param {{ to: string, subject: string, html: string, from?: string, replyTo?: string }} params
