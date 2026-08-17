@@ -113,9 +113,26 @@ export const loader = async ({ request }) => {
     appHandle = data?.app?.handle ?? null;
   } catch {}
 
+  // Le loader ne doit exposer que ce que la page affiche vraiment — pas
+  // l'objet account Prisma complet, qui inclut passwordHash,
+  // emailVerifyCode (verification d'email en clair) et, pour chaque
+  // boutique liee du tableau shops, sa propre turnstileSecretKey (donc,
+  // sur un compte multi-boutique, la cle secrete Turnstile des AUTRES
+  // boutiques liees serait aussi visible depuis celle-ci).
+  const accountForClient = account
+    ? {
+        id: account.id,
+        plan: account.plan,
+        email: account.email,
+        emailVerifiedAt: account.emailVerifiedAt,
+        appearanceColor: account.appearanceColor,
+        shops: (account.shops ?? []).map((s) => ({ id: s.id, shopDomain: s.shopDomain })),
+      }
+    : null;
+
   return {
     shopDomain,
-    account,
+    account: accountForClient,
     isOnboarding,
     shopifyAdminBase,
     appHandle,

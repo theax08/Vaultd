@@ -141,3 +141,23 @@ export function getNewlyUnlockedFeatures(account) {
   const current = PLAN_FEATURES[account.plan] ?? [];
   return current.filter((key) => !seen.has(key));
 }
+
+// Essai gratuit : 7 jours, une seule fois par compte (tous plans confondus,
+// pas par palier), disponible uniquement sur GROWTH et PRO. L'add-on
+// multi-boutique et les paliers SCALE/ELITE sont toujours factures direct.
+export const TRIAL_DAYS = 7;
+export const TRIAL_ELIGIBLE_PLANS = ["GROWTH", "PRO"];
+
+// account.trialStartedAt n'est jamais reinitialise une fois pose — c'est ce
+// qui garantit le "une seule fois". isActive ne redevient vrai que si le
+// compte est encore sur le plan effectivement essaye (une resiliation ou un
+// changement de plan pendant l'essai remet account.plan a autre chose, donc
+// isActive tombe a false naturellement sans logique supplementaire).
+export function getTrialStatus(account) {
+  if (!account?.trialStartedAt) {
+    return { hasUsedTrial: false, isActive: false, endsAt: null };
+  }
+  const endsAt = new Date(new Date(account.trialStartedAt).getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
+  const isActive = Date.now() < endsAt.getTime() && account.plan === account.trialPlan;
+  return { hasUsedTrial: true, isActive, endsAt };
+}

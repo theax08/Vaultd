@@ -1,6 +1,6 @@
 import { redirect } from "react-router";
 import { unauthenticated } from "../shopify.server";
-import { PLAN_ORDER, PLAN_LABELS } from "../vaultd-plans";
+import { PLAN_ORDER, PLAN_LABELS, TRIAL_ELIGIBLE_PLANS } from "../vaultd-plans";
 
 export const loader = async ({ request }) => {
   const url = new URL(request.url);
@@ -80,13 +80,23 @@ export const loader = async ({ request }) => {
       }
 
       if (account) {
+        const data = isNewAccount ? { plan, lastSeenPlan: plan } : { plan };
+        // account.trialStartedAt reflects state BEFORE this update — set once,
+        // on the account's first-ever confirmed GROWTH/PRO subscription (which
+        // is, by construction, the only time app.billing.request.jsx grants
+        // trialDays > 0). Never touched again after, which is what makes the
+        // trial one-time regardless of later plan switches or cancellations.
+        if (TRIAL_ELIGIBLE_PLANS.includes(plan) && !account.trialStartedAt) {
+          data.trialStartedAt = new Date();
+          data.trialPlan = plan;
+        }
         await db.vaultdAccount.update({
           where: { id: account.id },
           // lastSeenPlan only on a brand-new account, so this first plan
           // isn't shown as a "newly unlocked" feature on Help. On an
           // existing account, leave lastSeenPlan alone so a genuine
           // upgrade still surfaces what's new.
-          data: isNewAccount ? { plan, lastSeenPlan: plan } : { plan },
+          data,
         });
       }
       back.set("billing", "confirmed");

@@ -38,6 +38,8 @@ model VaultdAccount {
   emailVerifyCode          String?
   emailVerifyCodeExpiresAt DateTime?
   passwordHash             String?
+  trialStartedAt           DateTime?
+  trialPlan                String?
   createdAt                DateTime  @default(now())
   updatedAt                DateTime  @updatedAt
 

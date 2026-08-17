@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useActionData, useLoaderData, useSubmit, useFetcher, useSearchParams, Link } from "react-router";
 import { authenticate } from "../shopify.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
-import { PLAN_ORDER, PLAN_LABELS, PLAN_PRICES, getPlanFeatureList } from "../vaultd-plans";
+import { PLAN_ORDER, PLAN_LABELS, PLAN_PRICES, getPlanFeatureList, TRIAL_ELIGIBLE_PLANS, getTrialStatus } from "../vaultd-plans";
 import {
   pagePopStyle,
   pageHeaderRowStyle,
@@ -69,8 +69,17 @@ export const loader = async ({ request }) => {
   } catch {}
 
   const isPrimaryShop = !account?.primaryShopDomain || account.primaryShopDomain === session.shop;
+  const trialStatus = getTrialStatus(account);
 
-  return { account, shop: session.shop, shopifyAdminBase, appHandle, isPrimaryShop };
+  // Le loader ne doit renvoyer que ce que le client affiche vraiment — pas
+  // l'objet account Prisma complet, qui inclut passwordHash et
+  // emailVerifyCode (le code de verification d'email en clair, qui
+  // permettrait de "verifier" un email sans jamais avoir recu le mail).
+  const accountForClient = account
+    ? { plan: account.plan, shopsCount: account.shops?.length ?? 1 }
+    : null;
+
+  return { account: accountForClient, shop: session.shop, shopifyAdminBase, appHandle, isPrimaryShop, trialStatus };
 };
 
 async function isDevStore(admin) {
@@ -149,7 +158,7 @@ export const action = async ({ request }) => {
 };
 
 export default function PlansPage() {
-  const { account, shop, shopifyAdminBase, appHandle, isPrimaryShop } = useLoaderData();
+  const { account, shop, shopifyAdminBase, appHandle, isPrimaryShop, trialStatus } = useLoaderData();
 
   const getBillingHref = (plan) => {
     if (shopifyAdminBase && appHandle) {
@@ -189,7 +198,7 @@ export default function PlansPage() {
       setShowCancelConfirm(false);
     }
   }, [cancelFetcher.data]);
-  const linkedStoreCount = (account?.shops?.length ?? 1) - 1;
+  const linkedStoreCount = (account?.shopsCount ?? 1) - 1;
 
   return (
     <div style={{ ...pagePopStyle, minHeight: "100vh" }}>
@@ -218,6 +227,12 @@ export default function PlansPage() {
       {!currentPlan && isPrimaryShop && (
         <div style={{ marginBottom: 16, padding: "12px 16px", background: "#fff3cd", borderRadius: 8, border: "1px solid #ffc107", fontSize: 13.5, color: "#303030" }}>
           <strong>No active plan.</strong> Select a plan below to access Vaultd.
+        </div>
+      )}
+
+      {trialStatus.isActive && (
+        <div style={{ marginBottom: 16, padding: "12px 16px", background: "var(--vd-subtle, #F5F6F7)", borderRadius: 8, fontSize: 13.5, color: "#303030" }}>
+          <strong>Free trial active</strong> — ends {new Date(trialStatus.endsAt).toLocaleDateString("en-US")}. You can switch plans once your trial ends.
         </div>
       )}
 
@@ -268,21 +283,30 @@ export default function PlansPage() {
                 <span style={{ fontSize: 26, fontWeight: 600, color: "#1a1a1a", ...monoNumberStyle }}>{amount}</span>
                 {period && <span style={{ fontSize: 13, fontWeight: 400, color: "var(--vd-ink-3, #8B93A0)" }}>/ {period}</span>}
               </div>
+              {!isCurrent && !trialStatus.hasUsedTrial && TRIAL_ELIGIBLE_PLANS.includes(plan) && (
+                <div style={{ fontSize: 11.5, fontWeight: 600, color: "var(--vaultd-accent, #1a1a1a)" }}>
+                  7-day free trial
+                </div>
+              )}
               <PlanFeatureList features={featureList} />
               {isCurrent ? (
                 <button type="button" disabled style={secondaryButtonStyle}>
                   Current plan
                 </button>
-              ) : isPrimaryShop ? (
+              ) : !isPrimaryShop ? (
+                <button type="button" disabled style={secondaryButtonStyle} title="Only the primary store can change the shared plan">
+                  Switch to this plan
+                </button>
+              ) : trialStatus.isActive ? (
+                <button type="button" disabled style={secondaryButtonStyle} title={`Available once your free trial ends (${new Date(trialStatus.endsAt).toLocaleDateString("en-US")})`}>
+                  Switch to this plan
+                </button>
+              ) : (
                 <button
                   type="button"
                   style={primaryButtonStyle}
                   onClick={() => { window.top.location.href = getBillingHref(plan); }}
                 >
-                  Switch to this plan
-                </button>
-              ) : (
-                <button type="button" disabled style={secondaryButtonStyle} title="Only the primary store can change the shared plan">
                   Switch to this plan
                 </button>
               )}

@@ -1,6 +1,6 @@
 import { redirect } from "react-router";
 import { authenticate } from "../shopify.server";
-import { PLAN_ORDER, PLAN_LABELS } from "../vaultd-plans";
+import { PLAN_ORDER, PLAN_LABELS, TRIAL_ELIGIBLE_PLANS, getTrialStatus } from "../vaultd-plans";
 
 export const loader = async ({ request }) => {
   const url = new URL(request.url);
@@ -26,6 +26,18 @@ export const loader = async ({ request }) => {
     );
   }
 
+  // Essai gratuit 7 jours sur GROWTH/PRO, une seule fois par compte, et pas
+  // de changement de plan tant que l'essai en cours n'est pas termine —
+  // sinon un marchand pourrait enchainer GROWTH puis PRO en essai gratuit
+  // en continu, ou changer de palier gratuitement pendant l'essai.
+  const trialStatus = getTrialStatus(account);
+  if (trialStatus.isActive && plan !== account.trialPlan) {
+    return redirect(
+      `/app/plans?billing=error&debug=${encodeURIComponent(`You can't switch plans during your free trial. It ends ${trialStatus.endsAt.toLocaleDateString("en-US")}.`)}`
+    );
+  }
+  const trialDays = TRIAL_ELIGIBLE_PLANS.includes(plan) && !trialStatus.hasUsedTrial ? 7 : 0;
+
   const rawBase = process.env.SHOPIFY_APP_URL || new URL(request.url).origin;
   const baseUrl = (rawBase.startsWith("http") ? rawBase : `https://${rawBase}`).replace(/\/$/, "");
   const returnUrl = `${baseUrl}/app/billing/return?plan=${plan}&shop=${session.shop}${host ? `&host=${encodeURIComponent(host)}` : ""}`;
@@ -39,13 +51,14 @@ export const loader = async ({ request }) => {
     isTest = data?.shop?.plan?.partnerDevelopment === true;
   } catch {}
 
-  console.log("[billing] plan:", PLAN_LABELS[plan], "isTest:", isTest, "returnUrl:", returnUrl);
+  console.log("[billing] plan:", PLAN_LABELS[plan], "isTest:", isTest, "trialDays:", trialDays, "returnUrl:", returnUrl);
 
   try {
     await billing.request({
       plan: PLAN_LABELS[plan],
       isTest,
       returnUrl,
+      trialDays,
     });
     return redirect("/app/plans?billing=error&debug=no_redirect");
   } catch (err) {
