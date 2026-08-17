@@ -90,9 +90,9 @@ function boxRow(boxes) {
     </table>`;
 }
 
-function darkBanner(leftHtml, rightHtml) {
+function darkBanner(leftHtml, rightHtml, brandColor) {
   return `
-    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 16px 0; background-color: #111111; border-radius: 10px;">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 16px 0; background-color: ${escapeHtml(brandColor || "#111111")}; border-radius: 10px;">
       <tr>
         <td style="padding: 12px 16px;">
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
@@ -151,12 +151,10 @@ function shell({ boutiqueName, boutiqueLogo, brandColor, titleHtml, contentHtml,
                       <table role="presentation" cellpadding="0" cellspacing="0" border="0">
                         <tr>
                           ${boutiqueLogo ? `<td valign="middle">
-                            <img src="${escapeHtml(boutiqueLogo)}" alt="${escapeHtml(boutiqueName || "")}" width="32" height="32" style="display: block; border-radius: 999px; object-fit: cover;" />
-                          </td>
-                          <td width="8" style="font-size: 0;">&nbsp;</td>` : ""}
-                          <td valign="middle">
+                            <img src="${escapeHtml(boutiqueLogo)}" alt="${escapeHtml(boutiqueName || "")}" width="56" height="56" style="display: block; border-radius: 999px; object-fit: cover;" />
+                          </td>` : `<td valign="middle">
                             <span style="font-size: 16px; font-weight: 700; color: #111111;">${escapeHtml(boutiqueName || "")}</span>
-                          </td>
+                          </td>`}
                         </tr>
                       </table>
                     </td>
@@ -295,7 +293,8 @@ export function renderDropLiveEmail({
     ${paragraphsHtml(bodyText)}
     ${darkBanner(
       `<span style="color:#4ade80;">●</span> LIVE NOW`,
-      `Opened ${escapeHtml(openedLabel || "")}${closesInLabel ? ` · Closes in ${escapeHtml(closesInLabel)}` : ""}`
+      `Opened ${escapeHtml(openedLabel || "")}${closesInLabel ? ` · Closes in ${escapeHtml(closesInLabel)}` : ""}`,
+      brandColor
     )}
     ${infoBox({
       label: "Your position",
@@ -342,14 +341,15 @@ export function renderDropEndedEmail({
     ${paragraphsHtml(bodyText)}
     ${darkBanner(
       `<span style="color:#9aa0a6;">●</span> ${soldOut ? "SOLD OUT" : "PARTIAL"} · DROP CLOSED`,
-      escapeHtml(closedAtLabel || "")
+      escapeHtml(closedAtLabel || ""),
+      brandColor
     )}
     ${boxRow([
       { label: "Items sold", value: String(itemsSold ?? 0) },
       { label: "Sell-out time", value: escapeHtml(selloutLabel || "—") },
       { label: "On waitlist", value: String(waitlistCount ?? 0) },
     ])}
-    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 16px 0; background-color: #111111; border-radius: 10px;">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 16px 0; background-color: ${escapeHtml(brandColor || "#111111")}; border-radius: 10px;">
       <tr>
         <td style="padding: 16px 16px 18px 16px;">
           <div style="font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #9aa0a6; margin-bottom: 6px;">Coming next</div>
