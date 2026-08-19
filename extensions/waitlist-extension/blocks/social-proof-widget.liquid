@@ -101,10 +101,12 @@
 
   .sp-progress-fill-{{ block.id }} {
     height: 100%;
+    width: 100%;
     border-radius: 999px;
     background: linear-gradient(90deg, #6d5bd0, #8b3fd1);
-    width: 0%;
-    transition: width 0.4s ease;
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.4s ease;
   }
 
   .sp-progress-pct-{{ block.id }} {
@@ -190,7 +192,7 @@
         }
       }
       if (design === 'progress') {
-        if (fillEl) fillEl.style.width = '72%';
+        if (fillEl) fillEl.style.transform = 'scaleX(0.72)';
         if (capacityEl) capacityEl.textContent = '72%';
         if (spotsEl) spotsEl.textContent = 'Only 788 spots left';
       }
@@ -237,7 +239,7 @@
           return;
         }
         const pct = Math.max(0, Math.min(100, Number(data.capacityPct) || 0));
-        if (fillEl) fillEl.style.width = pct + '%';
+        if (fillEl) fillEl.style.transform = 'scaleX(' + (pct / 100) + ')';
         if (capacityEl) capacityEl.textContent = pct + '%';
         if (spotsEl) spotsEl.textContent = 'Only ' + (data.spotsLeft || 0).toLocaleString() + ' spots left';
       }
