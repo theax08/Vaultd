@@ -902,6 +902,12 @@ export default function SettingsPage() {
         </div>
       </div>
 
+      <p style={{ fontSize: 12, color: "#919191", marginTop: 24, textAlign: "center" }}>
+        <a href="https://vaultd.pro/privacy-policy" target="_blank" rel="noreferrer" style={{ color: "#919191" }}>
+          Privacy Policy
+        </a>
+      </p>
+
     </div>
   );
 }

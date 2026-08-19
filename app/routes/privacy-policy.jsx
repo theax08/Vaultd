@@ -58,7 +58,7 @@ export default function PrivacyPolicy() {
 
       <h2 style={h2}>4. Data retention</h2>
       <ul style={ul}>
-        <li><strong>Merchant data</strong> — retained while your Vaultd account is active. If you uninstall the app, we retain your data for 30 days to allow reinstallation, then permanently delete it.</li>
+        <li><strong>Merchant data</strong> — retained while your Vaultd account is active. If you uninstall the app, Shopify triggers our mandatory data deletion process 48 hours after uninstallation, and your store data is permanently deleted at that point.</li>
         <li><strong>Customer waitlist data</strong> — retained for the lifetime of the associated drop, plus a 90-day post-drop window for analytics. Customers can request removal at any time by using the unsubscribe link in any waitlist email.</li>
         <li><strong>Session tokens</strong> — Shopify access tokens are stored for as long as the app is installed. They are deleted when you uninstall.</li>
       </ul>
@@ -71,7 +71,7 @@ export default function PrivacyPolicy() {
       <h2 style={h2}>6. Your rights and choices</h2>
       <ul style={ul}>
         <li><strong>Access and correction</strong> — you can view and edit your Vaultd account information at any time from the Settings page.</li>
-        <li><strong>Data deletion</strong> — uninstalling the app triggers deletion of your data within 30 days. To request immediate deletion, contact us at the address below.</li>
+        <li><strong>Data deletion</strong> — uninstalling the app triggers deletion of your data 48 hours after uninstallation. To request deletion sooner, contact us at the address below.</li>
         <li><strong>Customer unsubscribe</strong> — every waitlist email includes an unsubscribe link. Unsubscribed customers remain in your waitlist records for historical accuracy but are excluded from future emails.</li>
         <li><strong>GDPR / data portability</strong> — if you are subject to GDPR and need a data export or deletion request processed, contact us and we will respond within 30 days.</li>
       </ul>

@@ -189,6 +189,12 @@ const DROPS_TEMPLATE = [
 ];
 
 export const loader = async ({ request }) => {
+  // Dev-only demo tooling — see api.inject-test-data.jsx for why this is
+  // gated behind an explicit opt-in rather than just authenticate.admin().
+  if (process.env.ALLOW_TEST_DATA_SEEDING !== "true") {
+    throw new Response("Not found", { status: 404 });
+  }
+
   const { session } = await authenticate.admin(request);
   const shopDomain = session.shop;
 

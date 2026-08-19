@@ -152,6 +152,16 @@ const INJECT_MAP = {
 };
 
 export const loader = async ({ request }) => {
+  // Dev-only demo tooling — writes fabricated drops/waitlist data straight
+  // into the calling shop's real database with no confirmation prompt and
+  // no UI entry point. authenticate.admin() alone let ANY merchant who
+  // found this URL pollute their own live analytics; opt-in env var keeps
+  // it usable for our own demo stores while defaulting to off for real
+  // merchants and reviewers.
+  if (process.env.ALLOW_TEST_DATA_SEEDING !== "true") {
+    throw new Response("Not found", { status: 404 });
+  }
+
   const { session } = await authenticate.admin(request);
   const shopDomain = session.shop;
 
