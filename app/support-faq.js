@@ -151,6 +151,11 @@ export const SUPPORT_CATEGORIES = [
         answer:
           "In your Shopify admin, go to Online Store → Themes → Customize. In the Vaultd section (under Apps), drag the Hype Widget block onto your product page template and save. The widget will appear automatically when a drop is active for that product.",
       },
+      {
+        question: "Why does my widget look different from other stores or examples?",
+        answer:
+          "The widget inherits styling from wherever it's placed in the theme. Dropped inside an existing template section (like a product page's built-in app block area), it picks up that template's spacing, alignment, and container width. Added to a blank section on a plain page instead, it renders with no surrounding layout and can look noticeably different — smaller, left-aligned, less padding. This isn't a bug in the widget; it's the theme's own styling around it. For a consistent look, place the widget inside a template that already has a styled container, or adjust the block's own settings (and the surrounding section's padding/alignment) in the theme editor.",
+      },
     ],
   },
   {

@@ -85,13 +85,18 @@
   }
 
   /* Design 3: Progress bar (limited waitlist) */
+  .sp-progress-row-{{ block.id }} {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
   .sp-progress-track-{{ block.id }} {
-    width: 100%;
+    flex: 1 1 auto;
     height: 12px;
     border-radius: 999px;
     background: rgba(var(--color-foreground), 0.1);
     overflow: hidden;
-    margin-bottom: 20px;
   }
 
   .sp-progress-fill-{{ block.id }} {
@@ -102,15 +107,15 @@
     transition: width 0.4s ease;
   }
 
-  .sp-progress-row-{{ block.id }} {
-    display: flex;
-    justify-content: space-between;
-    font-size: 18px;
-    margin-bottom: 8px;
+  .sp-progress-pct-{{ block.id }} {
+    flex: 0 0 auto;
+    font-size: 16px;
+    font-weight: 700;
+    white-space: nowrap;
   }
 
   .sp-progress-spots-{{ block.id }} {
-    margin: 10px 0 0 0;
+    margin: 12px 0 0 0;
     font-size: 15px;
     opacity: 0.6;
   }
@@ -133,16 +138,11 @@
         <p class="sp-avatars-count-{{ block.id }}"><span data-sp-count>0</span> in queue</p>
 
       {% else %}
-        <div class="sp-progress-track-{{ block.id }}">
-          <div class="sp-progress-fill-{{ block.id }}" data-sp-progress-fill></div>
-        </div>
         <div class="sp-progress-row-{{ block.id }}">
-          <span>{{ block.settings.progress_capacity_label }}</span>
-          <strong data-sp-capacity>0%</strong>
-        </div>
-        <div class="sp-progress-row-{{ block.id }}">
-          <span>{{ block.settings.progress_total_label }}</span>
-          <strong><span data-sp-count>0</span> people</strong>
+          <div class="sp-progress-track-{{ block.id }}">
+            <div class="sp-progress-fill-{{ block.id }}" data-sp-progress-fill></div>
+          </div>
+          <strong class="sp-progress-pct-{{ block.id }}" data-sp-capacity>0%</strong>
         </div>
         <p class="sp-progress-spots-{{ block.id }}" data-sp-spots></p>
       {% endif %}
@@ -236,8 +236,9 @@
           if (isDesignMode) showExample(); else card.hidden = true;
           return;
         }
-        if (fillEl) fillEl.style.width = data.capacityPct + '%';
-        if (capacityEl) capacityEl.textContent = data.capacityPct + '%';
+        const pct = Math.max(0, Math.min(100, Number(data.capacityPct) || 0));
+        if (fillEl) fillEl.style.width = pct + '%';
+        if (capacityEl) capacityEl.textContent = pct + '%';
         if (spotsEl) spotsEl.textContent = 'Only ' + (data.spotsLeft || 0).toLocaleString() + ' spots left';
       }
     }
@@ -334,18 +335,6 @@
       "id": "avatars_label",
       "label": "Label (avatar stack design)",
       "default": "People are waiting"
-    },
-    {
-      "type": "text",
-      "id": "progress_capacity_label",
-      "label": "Label (progress bar design)",
-      "default": "Waitlist capacity"
-    },
-    {
-      "type": "text",
-      "id": "progress_total_label",
-      "label": "Total label (progress bar design)",
-      "default": "Total waiting"
     }
   ]
 }
