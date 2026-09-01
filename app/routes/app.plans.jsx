@@ -232,7 +232,7 @@ export default function PlansPage() {
 
       {trialStatus.isActive && (
         <div style={{ marginBottom: 16, padding: "12px 16px", background: "var(--vd-subtle, #F5F6F7)", borderRadius: 8, fontSize: 13.5, color: "#303030" }}>
-          <strong>Free trial active</strong> — ends {new Date(trialStatus.endsAt).toLocaleDateString("en-US")}. You can switch plans once your trial ends.
+          <strong>Free trial active</strong> — ends {new Date(trialStatus.endsAt).toLocaleDateString("en-US")}. Switching plans now will end the trial and start billing for the new plan immediately.
         </div>
       )}
 
@@ -295,10 +295,6 @@ export default function PlansPage() {
                 </button>
               ) : !isPrimaryShop ? (
                 <button type="button" disabled style={secondaryButtonStyle} title="Only the primary store can change the shared plan">
-                  Switch to this plan
-                </button>
-              ) : trialStatus.isActive ? (
-                <button type="button" disabled style={secondaryButtonStyle} title={`Available once your free trial ends (${new Date(trialStatus.endsAt).toLocaleDateString("en-US")})`}>
                   Switch to this plan
                 </button>
               ) : (

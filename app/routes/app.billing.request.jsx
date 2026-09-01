@@ -26,16 +26,12 @@ export const loader = async ({ request }) => {
     );
   }
 
-  // Essai gratuit 7 jours sur GROWTH/PRO, une seule fois par compte, et pas
-  // de changement de plan tant que l'essai en cours n'est pas termine —
-  // sinon un marchand pourrait enchainer GROWTH puis PRO en essai gratuit
-  // en continu, ou changer de palier gratuitement pendant l'essai.
+  // Essai gratuit 7 jours sur GROWTH/PRO, une seule fois par compte. Shopify
+  // App Store requirement 1.2.3 exige que les marchands puissent changer de
+  // plan a tout moment, sans exception pour une periode d'essai en cours —
+  // donc pas de blocage ici. Le "une seule fois" reste garanti au niveau des
+  // donnees (hasUsedTrial), pas en empechant le changement de plan lui-meme.
   const trialStatus = getTrialStatus(account);
-  if (trialStatus.isActive && plan !== account.trialPlan) {
-    return redirect(
-      `/app/plans?billing=error&debug=${encodeURIComponent(`You can't switch plans during your free trial. It ends ${trialStatus.endsAt.toLocaleDateString("en-US")}.`)}`
-    );
-  }
   const trialDays = TRIAL_ELIGIBLE_PLANS.includes(plan) && !trialStatus.hasUsedTrial ? 7 : 0;
 
   const rawBase = process.env.SHOPIFY_APP_URL || new URL(request.url).origin;
