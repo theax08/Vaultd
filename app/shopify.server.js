@@ -95,6 +95,48 @@ const shopify = shopifyApp({
   ...(process.env.SHOP_CUSTOM_DOMAIN
     ? { customShopDomains: [process.env.SHOP_CUSTOM_DOMAIN] }
     : {}),
+  hooks: {
+    // Reconcile the stored plan with Shopify's actual subscription state
+    // right after every OAuth completion (install AND reinstall) — a
+    // safety net for App Store requirement 1.2.2 ("request approval for
+    // charges again on reinstall"). The app otherwise trusts
+    // account.plan to stay in sync purely via the app_subscriptions/update
+    // webhook; if that webhook were ever missed (delivery isn't
+    // guaranteed) for the subscription Shopify auto-cancels on uninstall,
+    // a reinstalling merchant would keep full paid access with no fresh
+    // charge. This runs a live check instead of trusting stored state.
+    afterAuth: async ({ session, admin }) => {
+      try {
+        const { getAccountForShop } = await import("./vaultd-account.server");
+        const db = (await import("./db.server")).default;
+        const account = await getAccountForShop(session.shop);
+        if (!account) return;
+        // Secondary (linked) shops don't carry their own plan-tier
+        // subscription — their own OAuth completion says nothing about
+        // the shared account's plan.
+        if (account.primaryShopDomain && account.primaryShopDomain !== session.shop) return;
+
+        const res = await admin.graphql(
+          `{ currentAppInstallation { activeSubscriptions { name status } } }`
+        );
+        const { data } = await res.json();
+        const subs = data?.currentAppInstallation?.activeSubscriptions ?? [];
+        const activePlanKey =
+          Object.entries(PLAN_LABELS).find(([, label]) =>
+            subs.some((s) => s.name === label && s.status === "ACTIVE")
+          )?.[0] ?? "FREE";
+
+        if (account.plan !== activePlanKey) {
+          await db.vaultdAccount.update({
+            where: { id: account.id },
+            data: { plan: activePlanKey },
+          });
+        }
+      } catch (err) {
+        console.error("[afterAuth] plan reconciliation failed for", session.shop, err?.message ?? err);
+      }
+    },
+  },
 });
 
 export default shopify;
