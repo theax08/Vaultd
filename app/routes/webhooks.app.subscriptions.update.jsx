@@ -22,7 +22,7 @@ export const action = async ({ request }) => {
 
   const settings = await db.shopSettings.findUnique({
     where: { shopDomain: shop },
-    select: { vaultdAccountId: true, account: { select: { primaryShopDomain: true } } },
+    select: { vaultdAccountId: true, account: { select: { primaryShopDomain: true, plan: true } } },
   });
 
   if (!settings?.vaultdAccountId) return new Response(null, { status: 200 });
@@ -57,12 +57,30 @@ export const action = async ({ request }) => {
     return new Response(null, { status: 200 });
   }
 
-  const newPlan = ACTIVE_STATUSES.has(status) ? planKey : "FREE";
+  if (ACTIVE_STATUSES.has(status)) {
+    await db.vaultdAccount.update({
+      where: { id: settings.vaultdAccountId },
+      data: { plan: planKey },
+    });
+    return new Response(null, { status: 200 });
+  }
 
-  await db.vaultdAccount.update({
-    where: { id: settings.vaultdAccountId },
-    data: { plan: newPlan },
-  });
+  // Switching plans cancels the old subscription and creates a new one
+  // (ApplyImmediately replacement) — both webhooks fire within moments of
+  // each other with no delivery-order guarantee. If this "cancelled" event
+  // for the OLD plan arrives AFTER the "active" event for the NEW plan
+  // already updated account.plan, blindly resetting to FREE here would
+  // wipe out the plan the merchant just switched to — looking, from the
+  // merchant's side, like the plan "removed itself" right after
+  // subscribing. Only reset when the account's current plan still matches
+  // THIS subscription's plan, so a stale/late event for an
+  // already-superseded plan is a safe no-op instead.
+  if (settings.account?.plan === planKey) {
+    await db.vaultdAccount.update({
+      where: { id: settings.vaultdAccountId },
+      data: { plan: "FREE" },
+    });
+  }
 
   return new Response(null, { status: 200 });
 };
