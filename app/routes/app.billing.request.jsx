@@ -2,6 +2,21 @@ import { redirect } from "react-router";
 import { authenticate } from "../shopify.server";
 import { PLAN_ORDER, PLAN_LABELS, TRIAL_ELIGIBLE_PLANS, getTrialStatus } from "../vaultd-plans";
 
+// Essais offerts a la main a une boutique precise (demo, partenariat), via
+// COMPED_TRIALS="boutique.myshopify.com:PLAN:jours", plusieurs entrees
+// separees par des virgules. Ca passe par le vrai billing Shopify —
+// l'abonnement existe et est simplement gratuit N jours — plutot que par
+// une ecriture directe en base : le hook afterAuth reconcilie le plan avec
+// l'abonnement reel chez Shopify et remettrait a FREE un plan pose "a la
+// main" sans abonnement correspondant.
+function compedTrialDays(shopDomain, plan) {
+  for (const entry of (process.env.COMPED_TRIALS || "").split(",")) {
+    const [shop, compedPlan, days] = entry.trim().split(":");
+    if (shop === shopDomain && compedPlan === plan) return Number(days) || 0;
+  }
+  return 0;
+}
+
 export const loader = async ({ request }) => {
   const url = new URL(request.url);
   const plan = url.searchParams.get("plan");
@@ -32,7 +47,8 @@ export const loader = async ({ request }) => {
   // donc pas de blocage ici. Le "une seule fois" reste garanti au niveau des
   // donnees (hasUsedTrial), pas en empechant le changement de plan lui-meme.
   const trialStatus = getTrialStatus(account);
-  const trialDays = TRIAL_ELIGIBLE_PLANS.includes(plan) && !trialStatus.hasUsedTrial ? 7 : 0;
+  const comped = compedTrialDays(session.shop, plan);
+  const trialDays = comped || (TRIAL_ELIGIBLE_PLANS.includes(plan) && !trialStatus.hasUsedTrial ? 7 : 0);
 
   const rawBase = process.env.SHOPIFY_APP_URL || new URL(request.url).origin;
   const baseUrl = (rawBase.startsWith("http") ? rawBase : `https://${rawBase}`).replace(/\/$/, "");
