@@ -23,6 +23,7 @@ import {
   destructiveTextButtonStyle,
   toggleSwitchStyle,
   toggleSwitchKnobStyle,
+  inputStyle,
   modalOverlayStyle,
   modalCardStyle,
   PlanLockedPage,
@@ -70,6 +71,7 @@ export const loader = async ({ request }) => {
       canSetWaitlistLimit: false,
       canAutoLaunch: false,
       canUseReferral: false,
+      canEarlyAccess: false,
     };
   }
   const limits = PLAN_LIMITS[plan];
@@ -88,6 +90,7 @@ export const loader = async ({ request }) => {
   const canSetWaitlistLimit = PLAN_FEATURES[plan].includes("waitlist_limit");
   const canAutoLaunch = PLAN_FEATURES[plan].includes("automatic_launch");
   const canUseReferral = PLAN_FEATURES[plan].includes("referral");
+  const canEarlyAccess = PLAN_FEATURES[plan].includes("early_access");
 
   // 1) Récupérer tous les drops de cette boutique
   const drops = await db.drop.findMany({
@@ -125,6 +128,7 @@ export const loader = async ({ request }) => {
     canSetWaitlistLimit,
     canAutoLaunch,
     canUseReferral,
+    canEarlyAccess,
   };
 };
 
@@ -175,6 +179,10 @@ export const action = async ({ request }) => {
     const maxWaitlistSizeRaw = (formData.get("maxWaitlistSize") || "").toString().trim();
     let referralEnabled = formData.get("referralEnabled") === "on";
     const referralPointsPerShareRaw = (formData.get("referralPointsPerShare") || "1").toString();
+    let earlyAccessEnabled = formData.get("earlyAccessEnabled") === "on";
+    const earlyAccessThresholdRaw = (formData.get("earlyAccessThreshold") || "50").toString();
+    const earlyAccessMinutesBeforeRaw = (formData.get("earlyAccessMinutesBefore") || "120").toString();
+    let storePassword = (formData.get("storePassword") || "").toString().trim();
 
     let errors = {};
     let hasErrors = false;
@@ -245,6 +253,10 @@ export const action = async ({ request }) => {
           maxWaitlistSize: maxWaitlistSizeRaw,
           referralEnabled,
           referralPointsPerShare,
+          earlyAccessEnabled,
+          earlyAccessThreshold: earlyAccessThresholdRaw,
+          earlyAccessMinutesBefore: earlyAccessMinutesBeforeRaw,
+          storePassword,
         },
       };
     }
@@ -271,6 +283,10 @@ export const action = async ({ request }) => {
           maxWaitlistSize: maxWaitlistSizeRaw,
           referralEnabled,
           referralPointsPerShare,
+          earlyAccessEnabled,
+          earlyAccessThreshold: earlyAccessThresholdRaw,
+          earlyAccessMinutesBefore: earlyAccessMinutesBeforeRaw,
+          storePassword,
         },
       };
     }
@@ -291,6 +307,10 @@ export const action = async ({ request }) => {
           maxWaitlistSize: maxWaitlistSizeRaw,
           referralEnabled,
           referralPointsPerShare,
+          earlyAccessEnabled,
+          earlyAccessThreshold: earlyAccessThresholdRaw,
+          earlyAccessMinutesBefore: earlyAccessMinutesBeforeRaw,
+          storePassword,
         },
       };
     }
@@ -316,6 +336,10 @@ export const action = async ({ request }) => {
           maxWaitlistSize: maxWaitlistSizeRaw,
           referralEnabled,
           referralPointsPerShare,
+          earlyAccessEnabled,
+          earlyAccessThreshold: earlyAccessThresholdRaw,
+          earlyAccessMinutesBefore: earlyAccessMinutesBeforeRaw,
+          storePassword,
         },
       };
     }
@@ -334,6 +358,25 @@ export const action = async ({ request }) => {
     if (!PLAN_FEATURES[plan].includes("referral")) {
       referralEnabled = false;
     }
+
+    // L'early access (mot de passe boutique envoye en avance) est Elite.
+    // On efface aussi le mot de passe stocke : garder un secret en base
+    // pour une fonctionnalite a laquelle le marchand n'a plus droit n'a
+    // aucun interet.
+    if (!PLAN_FEATURES[plan].includes("early_access")) {
+      earlyAccessEnabled = false;
+      storePassword = "";
+    }
+
+    // Valeurs tolerantes : un champ vide ou invalide retombe sur le defaut
+    // plutot que de bloquer l'enregistrement du drop sur une erreur de
+    // validation pour une option secondaire.
+    const parsedThreshold = Number.parseInt(earlyAccessThresholdRaw, 10);
+    const earlyAccessThreshold =
+      Number.isInteger(parsedThreshold) && parsedThreshold > 0 ? parsedThreshold : 50;
+    const parsedMinutesBefore = Number.parseInt(earlyAccessMinutesBeforeRaw, 10);
+    const earlyAccessMinutesBefore =
+      Number.isInteger(parsedMinutesBefore) && parsedMinutesBefore > 0 ? parsedMinutesBefore : 120;
 
     if (intent === "create") {
       if (limits.maxDropsPerMonth != null) {
@@ -359,6 +402,10 @@ export const action = async ({ request }) => {
               maxWaitlistSize: maxWaitlistSizeRaw,
               referralEnabled,
               referralPointsPerShare,
+              earlyAccessEnabled,
+              earlyAccessThreshold: earlyAccessThresholdRaw,
+              earlyAccessMinutesBefore: earlyAccessMinutesBeforeRaw,
+              storePassword,
             },
           };
         }
@@ -395,6 +442,10 @@ export const action = async ({ request }) => {
               autoLaunch,
               referralEnabled,
               referralPointsPerShare,
+              earlyAccessEnabled,
+              earlyAccessThreshold,
+              earlyAccessMinutesBefore,
+              storePassword: storePassword || null,
             },
           });
           created = true;
@@ -420,6 +471,10 @@ export const action = async ({ request }) => {
             maxWaitlistSize: maxWaitlistSizeRaw,
             referralEnabled,
             referralPointsPerShare,
+            earlyAccessEnabled,
+            earlyAccessThreshold: earlyAccessThresholdRaw,
+            earlyAccessMinutesBefore: earlyAccessMinutesBeforeRaw,
+            storePassword,
           },
         };
       }
@@ -440,6 +495,10 @@ export const action = async ({ request }) => {
         maxWaitlistSize,
         referralEnabled,
         referralPointsPerShare,
+        earlyAccessEnabled,
+        earlyAccessThreshold,
+        earlyAccessMinutesBefore,
+        storePassword: storePassword || null,
       };
       if (existing.status === "DRAFT") {
         data.maxUnits = maxUnits;
@@ -569,7 +628,7 @@ function buildDropExternalId(shopDomain, index) {
 // CLIENT: UI Component
 // ==========================================
 export default function DropsPage() {
-  const { locked, drops, shopDomain, dropsLeftThisMonth, canSetWaitlistLimit, canAutoLaunch, canUseReferral, maxUnitsPerDrop } = useLoaderData();
+  const { locked, drops, shopDomain, dropsLeftThisMonth, canSetWaitlistLimit, canAutoLaunch, canUseReferral, canEarlyAccess, maxUnitsPerDrop } = useLoaderData();
   const actionData = useActionData();
   const submit = useSubmit();
   const revalidator = useRevalidator();
@@ -607,6 +666,10 @@ export default function DropsPage() {
   const [displayDateText, setDisplayDateText] = useState("");
   const [isoDateText, setIsoDateText] = useState("");
   const [autoLaunchEnabled, setAutoLaunchEnabled] = useState(false);
+  const [earlyAccessEnabled, setEarlyAccessEnabled] = useState(false);
+  const [earlyAccessThresholdText, setEarlyAccessThresholdText] = useState("50");
+  const [earlyAccessMinutesText, setEarlyAccessMinutesText] = useState("120");
+  const [storePasswordText, setStorePasswordText] = useState("");
   const [maxWaitlistSizeText, setMaxWaitlistSizeText] = useState("");
   const [referralEnabled, setReferralEnabled] = useState(true);
   const [referralPointsPerShare, setReferralPointsPerShare] = useState(1);
@@ -681,6 +744,10 @@ export default function DropsPage() {
     setMaxWaitlistSizeText("");
     setReferralEnabled(true);
     setReferralPointsPerShare(1);
+    setEarlyAccessEnabled(false);
+    setEarlyAccessThresholdText("50");
+    setEarlyAccessMinutesText("120");
+    setStorePasswordText("");
   };
 
   // Ouverture en mode création
@@ -752,6 +819,10 @@ export default function DropsPage() {
     );
     setReferralEnabled(drop.referralEnabled !== false);
     setReferralPointsPerShare(drop.referralPointsPerShare || 1);
+    setEarlyAccessEnabled(Boolean(drop.earlyAccessEnabled));
+    setEarlyAccessThresholdText(String(drop.earlyAccessThreshold ?? 50));
+    setEarlyAccessMinutesText(String(drop.earlyAccessMinutesBefore ?? 120));
+    setStorePasswordText(drop.storePassword || "");
 
     setIsEditorOpen(true);
   };
@@ -1236,6 +1307,107 @@ export default function DropsPage() {
                       </>
                     ) : (
                       <LockedFeatureNotice title="Auto-launch & auto-close" minPlanLabel="the Scale plan" />
+                    )}
+                  </div>
+
+                  {/* EARLY ACCESS PASSWORD EMAIL — Elite only */}
+                  <div style={{ marginBottom: 14 }}>
+                    {canEarlyAccess ? (
+                      <>
+                        <input
+                          type="checkbox"
+                          name="earlyAccessEnabled"
+                          checked={earlyAccessEnabled}
+                          onChange={() => {}}
+                          style={{ display: "none" }}
+                          tabIndex={-1}
+                          readOnly
+                        />
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            padding: "2px 0",
+                          }}
+                        >
+                          <span style={{ fontWeight: 600, color: "#1a1a1a" }}>
+                            Early access password email
+                          </span>
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={earlyAccessEnabled}
+                            onClick={() => setEarlyAccessEnabled((v) => !v)}
+                            style={toggleSwitchStyle(earlyAccessEnabled)}
+                          >
+                            <span style={toggleSwitchKnobStyle(earlyAccessEnabled)} />
+                          </button>
+                        </div>
+                        {earlyAccessEnabled && (
+                          <>
+                            <p style={{ fontSize: 12, color: "#6d7175", margin: "4px 0 10px 0" }}>
+                              Sends your store password to the top of the waitlist before the public launch. Edit the email itself in Emails.
+                            </p>
+                            <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ marginBottom: 6 }}>
+                                  <span style={{ fontSize: 13, fontWeight: 500, color: "var(--vd-ink, #14181F)" }}>
+                                    Send to top
+                                  </span>
+                                </div>
+                                <input
+                                  name="earlyAccessThreshold"
+                                  style={inputStyle}
+                                  type="number"
+                                  min="1"
+                                  step="1"
+                                  inputMode="numeric"
+                                  value={earlyAccessThresholdText}
+                                  onChange={(e) => setEarlyAccessThresholdText(e.target.value)}
+                                  placeholder="50"
+                                />
+                              </div>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ marginBottom: 6 }}>
+                                  <span style={{ fontSize: 13, fontWeight: 500, color: "var(--vd-ink, #14181F)" }}>
+                                    Minutes before launch
+                                  </span>
+                                </div>
+                                <input
+                                  name="earlyAccessMinutesBefore"
+                                  style={inputStyle}
+                                  type="number"
+                                  min="1"
+                                  step="1"
+                                  inputMode="numeric"
+                                  value={earlyAccessMinutesText}
+                                  onChange={(e) => setEarlyAccessMinutesText(e.target.value)}
+                                  placeholder="120"
+                                />
+                              </div>
+                            </div>
+                            <div style={{ marginBottom: 6 }}>
+                              <span style={{ fontSize: 13, fontWeight: 500, color: "var(--vd-ink, #14181F)" }}>
+                                Store password
+                              </span>
+                            </div>
+                            <input
+                              name="storePassword"
+                              style={inputStyle}
+                              type="text"
+                              value={storePasswordText}
+                              onChange={(e) => setStorePasswordText(e.target.value)}
+                              placeholder="Copy it from Online Store → Preferences"
+                            />
+                            <p style={{ fontSize: 12, color: "#8a6116", margin: "6px 0 0 0", lineHeight: 1.5 }}>
+                              Keep password protection turned on in your Shopify settings until the drop opens — if you disable it or change the password after this email goes out, the one your customers received stops working.
+                            </p>
+                          </>
+                        )}
+                      </>
+                    ) : (
+                      <LockedFeatureNotice title="Early access password email" minPlanLabel="the Elite plan" />
                     )}
                   </div>
 

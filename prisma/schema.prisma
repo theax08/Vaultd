@@ -101,6 +101,17 @@ model Drop {
   referralPointsPerShare Int       @default(1)
   peakVelocity           Float?    @default(0)
 
+  // Early access (Elite) : le mot de passe boutique est envoye aux N
+  // premiers de la waitlist avant l'ouverture publique. storePassword est
+  // saisi a la main par le marchand — Shopify n'expose jamais la valeur du
+  // mot de passe boutique via l'API (OnlineStorePasswordProtection ne donne
+  // que `enabled`). earlyAccessSentAt sert de verrou anti-double-envoi.
+  earlyAccessEnabled       Boolean   @default(false)
+  earlyAccessThreshold     Int       @default(50)
+  earlyAccessMinutesBefore Int       @default(120)
+  earlyAccessSentAt        DateTime?
+  storePassword            String?
+
   orders          DropOrder[]
   productStats    DropProductStats[]
   trafficSources  DropTrafficSource[]

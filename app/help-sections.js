@@ -53,6 +53,21 @@ export const SECTIONS = [
     ],
   },
   {
+    key: "early_access",
+    title: "Early access password email",
+    minPlan: "ELITE",
+    intro: "Send your store password to the top of the waitlist before the public launch.",
+    tips: [
+      "Turn it on per drop, in the drop editor. You set two things there: how many people from the top of the waitlist get it, and how many minutes before the launch it goes out.",
+      "You paste your store password into the drop editor yourself. Shopify never exposes the storefront password through its API, so Vaultd can't read it from your settings — copy it from Online Store → Preferences.",
+      "Keep password protection enabled in Shopify until the drop opens. If you turn it off or change the password after the email is sent, the password your customers received stops working.",
+      "The top N is calculated at the moment the email is sent, not when people signed up. Someone who climbs into the top 50 through referrals before the send still receives it.",
+      "It's one email, one send. People who join the waitlist after it goes out don't get it — they get the normal drop-is-live email at launch instead.",
+      "This is a head start, not a private door: it's a single shared password, so assume it can be forwarded. The value is that your top waitlist members get in first, before the public.",
+      "Edit the wording, subject and branding in Emails → Early access, like any other Vaultd email.",
+    ],
+  },
+  {
     key: "referral",
     title: "Referral program",
     minPlan: "PRO",

@@ -1,5 +1,5 @@
 import db from "./db.server";
-import { sendDropLiveEmail, sendDropEndedEmail } from "./email-automations.server";
+import { sendDropLiveEmail, sendDropEndedEmail, sendEarlyAccessEmail } from "./email-automations.server";
 import { buildUnsubscribeUrl, buildLogoUrl } from "./unsubscribe.server";
 import { getAccountForShop } from "./vaultd-account.server";
 import { PLAN_FEATURES } from "./vaultd-plans";
@@ -293,6 +293,116 @@ export async function autoEndSoldOutDrops(shopDomain) {
   return ended;
 }
 
+// Envoie l'email "early access" (mot de passe boutique) aux N premiers de
+// la waitlist, earlyAccessMinutesBefore minutes avant l'ouverture publique.
+//
+// Le top N est calcule AU MOMENT DE L'ENVOI (score puis anciennete), pas a
+// l'inscription : quelqu'un qui monte dans le top grace aux parrainages
+// avant l'envoi doit le recevoir. earlyAccessSentAt sert de verrou
+// anti-double-envoi — sans lui, chaque passage du cron re-enverrait a tout
+// le monde tant que le drop n'est pas lance.
+export async function sendDueEarlyAccessEmails(shopDomain) {
+  const now = new Date();
+
+  const candidates = await db.drop.findMany({
+    where: {
+      shopDomain,
+      status: "DRAFT",
+      earlyAccessEnabled: true,
+      earlyAccessSentAt: null,
+      startTime: { not: null },
+    },
+  });
+
+  const sent = [];
+
+  for (const drop of candidates) {
+    try {
+      const startMs = new Date(drop.startTime).getTime();
+      const sendFromMs = startMs - (drop.earlyAccessMinutesBefore || 0) * 60 * 1000;
+
+      // Pas encore l'heure.
+      if (now.getTime() < sendFromMs) continue;
+
+      // Fenetre ratee (serveur arrete, drop programme trop tard...) : le
+      // drop est deja ouvert au public, un acces "en avance" n'a plus de
+      // sens. On pose le verrou pour ne pas re-tester a chaque tick.
+      if (now.getTime() >= startMs) {
+        await db.drop.update({ where: { id: drop.id }, data: { earlyAccessSentAt: now } });
+        console.warn("earlyAccess: send window already passed, skipping drop", drop.id);
+        continue;
+      }
+
+      // Sans mot de passe l'email n'a aucun interet — on ne pose pas le
+      // verrou, le marchand peut encore le renseigner avant l'ouverture.
+      if (!drop.storePassword) {
+        console.warn("earlyAccess: no store password set, waiting", drop.id);
+        continue;
+      }
+
+      const automation = await db.emailAutomation.findFirst({
+        where: { shopDomain, type: "EARLY_ACCESS" },
+      });
+      if (!automation || !automation.active) continue;
+
+      const threshold = Math.max(1, drop.earlyAccessThreshold || 50);
+      const [recipients, waitlistCount] = await Promise.all([
+        db.waitlistEntry.findMany({
+          where: { dropId: drop.id, unsubscribedAt: null },
+          orderBy: [{ score: "desc" }, { createdAt: "asc" }],
+          take: threshold,
+        }),
+        db.waitlistEntry.count({ where: { dropId: drop.id, unsubscribedAt: null } }),
+      ]);
+
+      if (recipients.length === 0) {
+        await db.drop.update({ where: { id: drop.id }, data: { earlyAccessSentAt: now } });
+        continue;
+      }
+
+      const dateOpts = { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" };
+      const accessOpensLabel = new Date(sendFromMs).toLocaleString("en-US", dateOpts);
+      const publicStartLabel = new Date(startMs).toLocaleString("en-US", dateOpts);
+      const boutiqueLogo = buildLogoUrl(automation);
+      const brandColor = automation.mainColor || "#1a1a1a";
+
+      for (let i = 0; i < recipients.length; i++) {
+        const entry = recipients[i];
+        if (!entry.email) continue;
+        try {
+          await sendEarlyAccessEmail({
+            to: entry.email,
+            boutiqueName: automation.brandName,
+            boutiqueLogo,
+            brandColor,
+            subject: automation.subject,
+            body: automation.body,
+            dropName: drop.name,
+            position: i + 1,
+            threshold,
+            waitlistCount,
+            storePassword: drop.storePassword,
+            accessOpensLabel,
+            publicStartLabel,
+            maxUnits: drop.maxUnits,
+            ctaUrl: withEmailTrackingParam(automation.ctaUrl) || null,
+            unsubscribeUrl: buildUnsubscribeUrl(entry.id),
+          });
+        } catch (err) {
+          console.error("earlyAccess: failed to send to", entry.email, err);
+        }
+      }
+
+      await db.drop.update({ where: { id: drop.id }, data: { earlyAccessSentAt: new Date() } });
+      sent.push(drop.id);
+    } catch (err) {
+      console.error("sendDueEarlyAccessEmails: failed for drop", drop.id, err);
+    }
+  }
+
+  return sent;
+}
+
 // Point d'entree unique pour le polling (loaders admin ou cron externe) :
 // lance d'abord les drops programmes, puis cloture ceux qui sont sold-out.
 //
@@ -308,12 +418,28 @@ export async function runAutoDropLifecycle(shopDomain) {
   try {
     account = await getAccountForShop(shopDomain);
   } catch {}
-  const hasAutoLaunch = (PLAN_FEATURES[account?.plan] ?? []).includes("automatic_launch");
-  if (!hasAutoLaunch) {
-    return { launched: [], ended: [] };
+  const features = PLAN_FEATURES[account?.plan] ?? [];
+
+  // Early access est ELITE, auto-launch est SCALE : deux features
+  // distinctes, donc deux gates distincts. Les imbriquer ferait dependre
+  // l'envoi des mots de passe d'un palier qui n'a rien a voir — et le
+  // casserait silencieusement si automatic_launch changeait de palier.
+  // Isole dans son propre try/catch pour qu'un echec ici n'empeche pas
+  // les lancements/clotures automatiques de la meme boutique.
+  let earlyAccess = [];
+  if (features.includes("early_access")) {
+    try {
+      earlyAccess = await sendDueEarlyAccessEmails(shopDomain);
+    } catch (err) {
+      console.error("runAutoDropLifecycle: early access sweep failed", shopDomain, err);
+    }
+  }
+
+  if (!features.includes("automatic_launch")) {
+    return { launched: [], ended: [], earlyAccess };
   }
 
   const launched = await autoLaunchDueDrops(shopDomain);
   const ended = await autoEndSoldOutDrops(shopDomain);
-  return { launched, ended };
+  return { launched, ended, earlyAccess };
 }

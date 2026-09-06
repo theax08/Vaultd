@@ -144,6 +144,56 @@ function ctaButton(href, label, brandColor) {
     </table>`;
 }
 
+// Le mot de passe est ce que le destinataire vient chercher : il doit
+// ressortir sans dependre d'une image (souvent bloquee par les clients
+// mail) et rester lisible/copiable en monospace.
+function passwordBox(password, brandColor) {
+  if (!password) return "";
+  return `
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 16px 0; border: 2px solid ${escapeHtml(brandColor || "#111111")}; border-radius: 12px;">
+      <tr>
+        <td align="center" style="padding: 18px 16px 20px 16px;">
+          <div style="font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #8a8a8a; margin-bottom: 10px;">Store password</div>
+          <div style="font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size: 26px; font-weight: 700; letter-spacing: 0.12em; color: #111111;">${escapeHtml(password)}</div>
+          <div style="margin-top: 10px; font-size: 12px; color: #8a8a8a;">Enter this at the store entrance to browse before launch</div>
+        </td>
+      </tr>
+    </table>`;
+}
+
+// Liste verticale libelle -> valeur (heure d'acces, heure publique, stock),
+// plus lisible que boxRow en colonnes quand les valeurs sont des dates.
+function detailRows(rows) {
+  const cells = rows
+    .filter(Boolean)
+    .map(
+      (r, i) => `
+        <tr>
+          <td style="padding: ${i === 0 ? "0" : "9px"} 0 0 0; font-size: 13px; color: #555555;">${r.label}</td>
+          <td align="right" style="padding: ${i === 0 ? "0" : "9px"} 0 0 0; font-size: 13px; font-weight: 700; color: #111111;">${r.value}</td>
+        </tr>`
+    )
+    .join("");
+  if (!cells) return "";
+  return `
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 16px 0; background-color: #f5f5f7; border-radius: 12px;">
+      <tr>
+        <td style="padding: 14px 16px;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">${cells}</table>
+        </td>
+      </tr>
+    </table>`;
+}
+
+function noteBlock(html, brandColor) {
+  return `
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 4px 0; background-color: #f5f5f7;">
+      <tr>
+        <td style="padding: 12px 14px; border-left: 3px solid ${escapeHtml(brandColor || "#111111")}; font-size: 12.5px; line-height: 1.6; color: #555555;">${html}</td>
+      </tr>
+    </table>`;
+}
+
 function shell({ boutiqueName, boutiqueLogo, brandColor, titleHtml, contentHtml, unsubscribeUrl }) {
   return `
 <!DOCTYPE html>
@@ -336,6 +386,53 @@ export function renderDropLiveEmail({
     boutiqueLogo,
     brandColor,
     titleHtml: "It's on.",
+    contentHtml,
+    unsubscribeUrl,
+  });
+}
+
+export function renderEarlyAccessEmail({
+  boutiqueName,
+  boutiqueLogo,
+  brandColor,
+  bodyText,
+  dropName,
+  position,
+  waitlistCount,
+  storePassword,
+  accessOpensLabel,
+  publicStartLabel,
+  maxUnits,
+  ctaUrl,
+  unsubscribeUrl,
+}) {
+  const total = Number(waitlistCount);
+  const contentHtml = `
+    ${paragraphsHtml(bodyText)}
+    ${infoBox({
+      label: "Your position",
+      value: position != null ? `#${position}` : "—",
+      sub: Number.isFinite(total) && total > 0
+        ? `out of ${total.toLocaleString("en-US")} people waiting for <strong>${escapeHtml(dropName || "")}</strong>.`
+        : `on the <strong>${escapeHtml(dropName || "")}</strong> waitlist.`,
+    })}
+    ${passwordBox(storePassword, brandColor)}
+    ${detailRows([
+      accessOpensLabel ? { label: "Your access opens", value: escapeHtml(accessOpensLabel) } : null,
+      publicStartLabel ? { label: "Public drop starts", value: escapeHtml(publicStartLabel) } : null,
+      maxUnits != null ? { label: "Units available", value: String(maxUnits) } : null,
+    ])}
+    ${ctaButton(ctaUrl, "Enter the store →", brandColor)}
+    ${noteBlock(
+      `This password is meant for you. Sharing it means more people competing for the same${maxUnits != null ? ` ${maxUnits}` : ""} units — including the ones you're waiting for.`,
+      brandColor
+    )}`;
+
+  return shell({
+    boutiqueName,
+    boutiqueLogo,
+    brandColor,
+    titleHtml: "You're in early.<br/>Here's the store password.",
     contentHtml,
     unsubscribeUrl,
   });

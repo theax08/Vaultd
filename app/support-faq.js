@@ -48,6 +48,11 @@ export const SUPPORT_CATEGORIES = [
           "Once a drop is ENDED, its email automations are locked to keep the historical record consistent. Create or pick an active/upcoming drop instead.",
       },
       {
+        question: "How does the early access password email work?",
+        answer:
+          "On the Elite plan, you can send your store password to the top of a drop's waitlist before the public launch. Turn it on in the drop editor, where you also set how many people from the top of the list receive it and how many minutes before launch it goes out. You paste the store password there yourself — Shopify doesn't expose the storefront password through its API, so copy it from Online Store → Preferences. The wording, subject and branding are edited in Emails → Early access, like any other Vaultd email. Two things to know: keep password protection enabled in Shopify until the drop opens (changing or disabling it makes the password you sent useless), and remember it's one shared password, so treat it as a head start for your top members rather than a private door.",
+      },
+      {
         question: "How do I customize the email design?",
         answer:
           "In the Emails section, select your automation and edit the subject, body, brand color, and CTA button. You can also upload your store logo — it appears at the top of every email sent for that automation.",

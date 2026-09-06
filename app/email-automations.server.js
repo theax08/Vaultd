@@ -5,6 +5,7 @@ import {
   renderWaitlistRankUpdateEmail,
   renderDropLiveEmail,
   renderDropEndedEmail,
+  renderEarlyAccessEmail,
 } from "./email-templates";
 
 /**
@@ -97,6 +98,55 @@ export async function sendDropLiveEmail({
     accessLink,
     linkValidHoursLabel,
     maxUnits,
+    unsubscribeUrl,
+  });
+
+  await sendEmail({ to, subject: renderTemplate(subject, vars), html, from: buildFromHeader(boutiqueName) });
+}
+
+/**
+ * Envoi de l'email "Early access" (Elite) : mot de passe boutique envoye
+ * aux N premiers de la waitlist avant l'ouverture publique.
+ */
+export async function sendEarlyAccessEmail({
+  to,
+  boutiqueName,
+  boutiqueLogo,
+  brandColor,
+  subject,
+  body,
+  dropName,
+  position,
+  threshold,
+  waitlistCount,
+  storePassword,
+  accessOpensLabel,
+  publicStartLabel,
+  maxUnits,
+  ctaUrl,
+  unsubscribeUrl,
+}) {
+  const vars = {
+    drop_name: dropName,
+    position,
+    brand_name: boutiqueName,
+    threshold,
+    waitlist_count: waitlistCount,
+    store_password: storePassword,
+  };
+  const html = renderEarlyAccessEmail({
+    boutiqueName,
+    boutiqueLogo,
+    brandColor,
+    bodyText: renderTemplate(body, vars),
+    dropName,
+    position,
+    waitlistCount,
+    storePassword,
+    accessOpensLabel,
+    publicStartLabel,
+    maxUnits,
+    ctaUrl,
     unsubscribeUrl,
   });
 

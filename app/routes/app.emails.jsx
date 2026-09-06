@@ -22,6 +22,7 @@ const TYPES = {
   WAITLIST_RANK_UPDATE: "WAITLIST_RANK_UPDATE",
   DROP_LIVE: "DROP_LIVE",
   DROP_ENDED: "DROP_ENDED",
+  EARLY_ACCESS: "EARLY_ACCESS",
 };
 
 const SUBJECT_RECOMMENDED_LIMIT = 60;
@@ -129,6 +130,15 @@ export const loader = async ({ request }) => {
       "{{drop_name}} is officially closed. Here's how it went.",
   });
 
+  // 5) Early access (Elite) — mot de passe boutique envoye en avance
+  const earlyAccessAutomation = await getOrCreate(TYPES.EARLY_ACCESS, {
+    subject: "You're in early — here's the {{drop_name}} password.",
+    body:
+      "Hey,\n\n" +
+      "You're one of the first {{threshold}} people on the waitlist for {{drop_name}} — " +
+      "which means you get the store password before everyone else.",
+  });
+
   // Pour le selecteur "Drop d'aperçu" : on propose les drops par nom plutot
   // que de demander de copier-coller leur ID. Seuls les drops pas encore
   // lances ont besoin d'un aperçu (un drop ENDED n'a plus d'automation a tester).
@@ -157,6 +167,7 @@ export const loader = async ({ request }) => {
       [TYPES.WAITLIST_RANK_UPDATE]: waitlistRankUpdate,
       [TYPES.DROP_LIVE]: dropLiveAutomation,
       [TYPES.DROP_ENDED]: dropEndedAutomation,
+      [TYPES.EARLY_ACCESS]: earlyAccessAutomation,
     },
   };
 };
@@ -340,6 +351,18 @@ export const action = async ({ request }) => {
           waitlistCount: PREVIEW_SAMPLE_POSITION,
           nextDropCtaUrl: ctaUrl,
         });
+      } else if (type === TYPES.EARLY_ACCESS) {
+        await emailAutomations.sendEarlyAccessEmail({
+          ...shared,
+          position: 12,
+          threshold: 50,
+          waitlistCount: 2731,
+          storePassword: "SUMMER-001",
+          accessOpensLabel: "Fri, Oct 10, 1:00 PM",
+          publicStartLabel: "Fri, Oct 10, 3:00 PM",
+          maxUnits: 200,
+          ctaUrl,
+        });
       } else {
         return { intent, type, error: "Unknown email type." };
       }
@@ -367,7 +390,19 @@ export const action = async ({ request }) => {
     const dropName = formData.get("dropName")?.toString() || "Your Drop";
 
     const templates = await import("../email-templates");
-    const vars = { drop_name: dropName, position: PREVIEW_SAMPLE_POSITION, brand_name: brandName, access_link: ctaUrl };
+    // Valeurs d'exemple pour l'apercu. Les cles propres a l'early access
+    // (threshold/waitlist_count/store_password) doivent y figurer aussi,
+    // sinon renderTemplate les remplace par du vide et le corps par defaut
+    // s'affiche avec un trou au milieu d'une phrase.
+    const vars = {
+      drop_name: dropName,
+      position: type === TYPES.EARLY_ACCESS ? 12 : PREVIEW_SAMPLE_POSITION,
+      brand_name: brandName,
+      access_link: ctaUrl,
+      threshold: 50,
+      waitlist_count: 2731,
+      store_password: "SUMMER-001",
+    };
     const resolvedSubject = templates.renderTemplate(subject, vars);
     const bodyText = templates.renderTemplate(body, vars);
 
@@ -410,6 +445,17 @@ export const action = async ({ request }) => {
         nextDropName: "Drop 02",
         nextDropCtaUrl: ctaUrl || "#",
       });
+    } else if (type === TYPES.EARLY_ACCESS) {
+      html = templates.renderEarlyAccessEmail({
+        ...shared,
+        position: 12,
+        waitlistCount: 2731,
+        storePassword: "SUMMER-001",
+        accessOpensLabel: "Fri, Oct 10, 1:00 PM",
+        publicStartLabel: "Fri, Oct 10, 3:00 PM",
+        maxUnits: 200,
+        ctaUrl: ctaUrl || "#",
+      });
     } else {
       return { intent, error: "Unknown email type." };
     }
@@ -427,7 +473,7 @@ export const action = async ({ request }) => {
 // rank_update n'est pas un groupe mais un e-mail a l'interieur du groupe
 // waitlist (mise a jour de position/referral) — reservee a PRO+, meme si
 // la confirmation de waitlist reste dispo des GROWTH.
-const STEP_MIN_PLAN = { waitlist: "GROWTH", rank_update: "PRO", live: "PRO", ended: "PRO" };
+const STEP_MIN_PLAN = { waitlist: "GROWTH", rank_update: "PRO", early_access: "ELITE", live: "PRO", ended: "PRO" };
 
 function isStepLocked(stepId, plan) {
   const minPlan = STEP_MIN_PLAN[stepId] ?? "PRO";
@@ -441,6 +487,7 @@ function isStepLocked(stepId, plan) {
 // (VAULTD-DESIGN-emails.md 8.12).
 const GROUPS = [
   { id: "waitlist", label: "Waitlist", types: [TYPES.WAITLIST_CONFIRMATION, TYPES.WAITLIST_RANK_UPDATE] },
+  { id: "early_access", label: "Early access", types: [TYPES.EARLY_ACCESS] },
   { id: "live", label: "Drop live", types: [TYPES.DROP_LIVE] },
   { id: "ended", label: "After the drop", types: [TYPES.DROP_ENDED] },
 ];
@@ -456,6 +503,13 @@ const CONFIG_BY_TYPE = {
     title: "Rank update",
     description: "Sent when a customer moves up or down in the waitlist (position changes).",
     meta: ["{{drop_name}}", "{{position}}", "{{brand_name}}"],
+  },
+  [TYPES.EARLY_ACCESS]: {
+    title: "Early access password",
+    description:
+      "Sent to the top of the waitlist before the public launch, with your store password. Turn it on per drop in the drop editor, where you also set how many people get it and how early.",
+    meta: ["{{drop_name}}", "{{position}}", "{{brand_name}}", "{{threshold}}", "{{waitlist_count}}", "{{store_password}}"],
+    ctaLabel: "Destination URL (the password-protected page the \"Enter the store\" button opens)",
   },
   [TYPES.DROP_LIVE]: {
     title: "Drop is live",
@@ -552,16 +606,19 @@ export default function EmailsPage() {
     [TYPES.WAITLIST_RANK_UPDATE]: automationsByType[TYPES.WAITLIST_RANK_UPDATE].subject,
     [TYPES.DROP_LIVE]: automationsByType[TYPES.DROP_LIVE].subject,
     [TYPES.DROP_ENDED]: automationsByType[TYPES.DROP_ENDED].subject,
+    [TYPES.EARLY_ACCESS]: automationsByType[TYPES.EARLY_ACCESS].subject,
   });
   const [bodies, setBodies] = useState({
     [TYPES.WAITLIST_CONFIRMATION]: automationsByType[TYPES.WAITLIST_CONFIRMATION].body,
     [TYPES.WAITLIST_RANK_UPDATE]: automationsByType[TYPES.WAITLIST_RANK_UPDATE].body,
     [TYPES.DROP_LIVE]: automationsByType[TYPES.DROP_LIVE].body,
     [TYPES.DROP_ENDED]: automationsByType[TYPES.DROP_ENDED].body,
+    [TYPES.EARLY_ACCESS]: automationsByType[TYPES.EARLY_ACCESS].body,
   });
   const [ctaUrls, setCtaUrls] = useState({
     [TYPES.DROP_LIVE]: automationsByType[TYPES.DROP_LIVE].ctaUrl || "",
     [TYPES.DROP_ENDED]: automationsByType[TYPES.DROP_ENDED].ctaUrl || "",
+    [TYPES.EARLY_ACCESS]: automationsByType[TYPES.EARLY_ACCESS].ctaUrl || "",
   });
 
   // ---- Activation — indépendante du modèle, immédiate ----
@@ -570,6 +627,7 @@ export default function EmailsPage() {
     [TYPES.WAITLIST_RANK_UPDATE]: automationsByType[TYPES.WAITLIST_RANK_UPDATE].active,
     [TYPES.DROP_LIVE]: automationsByType[TYPES.DROP_LIVE].active,
     [TYPES.DROP_ENDED]: automationsByType[TYPES.DROP_ENDED].active,
+    [TYPES.EARLY_ACCESS]: automationsByType[TYPES.EARLY_ACCESS].active,
   });
   const [justActivated, setJustActivated] = useState(null); // type juste passe a actif, pour le message ponctuel
 
