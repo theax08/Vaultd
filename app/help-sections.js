@@ -41,7 +41,11 @@ export const SECTIONS = [
   {
     key: "hype_widgets",
     title: "Hype building widgets",
-    minPlan: "PRO",
+    // GROWTH, pas PRO : la fonctionnalite est incluse des Growth
+    // (PLAN_FEATURE_ADDITIONS) et la page Plans l'annonce ainsi. Marquee
+    // PRO ici, la section s'affichait verrouillee — badge "PRO" et tips
+    // masques cote serveur — a des marchands Growth qui y avaient droit.
+    minPlan: "GROWTH",
     intro: "Countdown and social proof widgets for your storefront theme.",
     tips: [
       "Add the countdown widget to your product page a few days before launch to build anticipation.",
@@ -97,7 +101,7 @@ export const SECTIONS = [
     minPlan: "PRO",
     intro: "Rank update, drop-is-live and drop-ended emails sent automatically — on top of the instant waitlist confirmation email included on every plan.",
     tips: [
-      "The instant waitlist confirmation email is included starting at Growth. Pro unlocks the rest: rank-update, drop-is-live, and drop-ended.",
+      "The instant waitlist confirmation email is included starting at Growth. Pro unlocks rank-update, drop-is-live and drop-ended. Elite adds a fifth one, the early access password email, and strips the Vaultd mentions from all of them.",
       "Link each automation to a specific drop from the Emails page — it only fires for that drop.",
       "Customize the brand color and logo so emails match your store, not a generic template.",
       "Rank update emails are a strong re-engagement tool: they remind people they're close to getting in.",

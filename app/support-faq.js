@@ -40,7 +40,7 @@ export const SUPPORT_CATEGORIES = [
       {
         question: "Which plan do I need for automated emails?",
         answer:
-          "Growth includes the instant waitlist confirmation email. Pro and above unlock the full set: rank-update (referral position changes), drop-is-live, and drop-ended emails — all customizable with your brand, logo, and CTA links.",
+          "Growth includes the instant waitlist confirmation email. Pro adds rank-update (referral position changes), drop-is-live and drop-ended. Elite adds the early access password email, and removes the Vaultd mentions from all of them. All are customizable with your brand, logo, and CTA links.",
       },
       {
         question: "Why can't I link an automation to an ended drop?",
@@ -136,9 +136,19 @@ export const SUPPORT_CATEGORIES = [
           "Go to Plans, find the plan you want, and click \"Switch to this plan\". Shopify will ask you to confirm the new subscription. All Vaultd plans are paid — there is no free tier.",
       },
       {
+        question: "Is there a free trial?",
+        answer:
+          "Yes — 7 days free on Growth and Pro. It's a one-time trial per account: once you've used it, subscribing again (to either plan) starts billing right away, and Scale and Elite never include a trial. You still approve the subscription upfront in Shopify, but your card isn't charged until the 7 days are up, so cancelling before then costs you nothing.",
+      },
+      {
         question: "Will I be charged immediately when I upgrade?",
         answer:
-          "Shopify handles all billing. When you confirm an upgrade, the charge starts from that date on a 30-day cycle. If you upgrade mid-cycle from a paid plan, Shopify prorates the difference automatically.",
+          "Shopify handles all billing. If you're starting your one-time 7-day free trial on Growth or Pro, nothing is charged until the trial ends — you approve the subscription, but the first charge lands on day 8. Otherwise the charge starts from the date you confirm, on a 30-day cycle, and Shopify prorates the difference automatically if you upgrade mid-cycle from a paid plan.",
+      },
+      {
+        question: "Can I change plans during my free trial?",
+        answer:
+          "Yes, you can upgrade or downgrade at any time, trial or not. Be aware that switching ends the trial: your one-time trial is already used, so the new plan starts billing immediately rather than carrying the remaining free days over.",
       },
     ],
   },
