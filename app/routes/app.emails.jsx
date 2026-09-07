@@ -39,32 +39,29 @@ const TYPE_TO_STEP = {
 // access envoie le VRAI mot de passe boutique — on verifie donc le plan
 // cote serveur, comme partout ailleurs dans l'app. STEP_MIN_PLAN reste la
 // source unique des paliers (definie plus bas, lue a l'execution).
-async function isTypeAllowedForShop(shopDomain, type) {
-  const minPlan = STEP_MIN_PLAN[TYPE_TO_STEP[type]];
-  if (!minPlan) return false;
+// Un seul lookup de compte par requete : l'apercu se declenche a chaque
+// frappe (debounce 400ms) et faisait sinon deux fois la meme requete, une
+// pour le droit d'acces et une pour la marque blanche.
+async function getShopPlan(shopDomain) {
   try {
     const { getAccountForShop } = await import("../vaultd-account.server");
     const account = await getAccountForShop(shopDomain);
-    const plan = PLAN_ORDER.includes(account?.plan) ? account.plan : null;
-    return PLAN_ORDER.indexOf(plan) >= PLAN_ORDER.indexOf(minPlan);
+    return PLAN_ORDER.includes(account?.plan) ? account.plan : null;
   } catch {
-    // Un blip DB ne doit pas ouvrir l'acces a une fonctionnalite payante.
-    return false;
+    // Un blip DB ne doit ni ouvrir une fonctionnalite payante, ni retirer
+    // le branding : plan null fait echouer les deux checks du bon cote.
+    return null;
   }
 }
 
-// L'apercu et le test doivent montrer l'email tel qu'il partira vraiment,
-// mentions Vaultd comprises (ou absentes en Elite) — sinon le marchand ne
-// peut pas verifier ce que son client recevra. Echec de lookup = on garde
-// le branding, jamais l'inverse.
-async function shopHidesVaultdBranding(shopDomain) {
-  try {
-    const { getAccountForShop } = await import("../vaultd-account.server");
-    const account = await getAccountForShop(shopDomain);
-    return (PLAN_FEATURES[account?.plan] ?? []).includes("white_label");
-  } catch {
-    return false;
-  }
+function isTypeAllowedForPlan(plan, type) {
+  const minPlan = STEP_MIN_PLAN[TYPE_TO_STEP[type]];
+  if (!minPlan) return false;
+  return PLAN_ORDER.indexOf(plan) >= PLAN_ORDER.indexOf(minPlan);
+}
+
+function planHidesVaultdBranding(plan) {
+  return (PLAN_FEATURES[plan] ?? []).includes("white_label");
 }
 
 // Valeurs d'exemple de l'apercu/test early access. On lit les VRAIES
@@ -399,7 +396,8 @@ export const action = async ({ request }) => {
     if (isTestSendRateLimited(shopDomain)) {
       return { intent, type, error: "Too many test emails sent — wait a minute and try again." };
     }
-    if (!(await isTypeAllowedForShop(shopDomain, type))) {
+    const shopPlan = await getShopPlan(shopDomain);
+    if (!isTypeAllowedForPlan(shopPlan, type)) {
       return { intent, type, error: "This email isn't available on your current plan." };
     }
 
@@ -421,7 +419,7 @@ export const action = async ({ request }) => {
       body,
       dropName,
       unsubscribeUrl: "#",
-      hideVaultdBranding: await shopHidesVaultdBranding(shopDomain),
+      hideVaultdBranding: planHidesVaultdBranding(shopPlan),
     };
 
     try {
@@ -483,7 +481,8 @@ export const action = async ({ request }) => {
     const dropName = formData.get("dropName")?.toString() || "Your Drop";
     const dropExternalId = formData.get("dropExternalId")?.toString() || "";
 
-    if (!(await isTypeAllowedForShop(shopDomain, type))) {
+    const shopPlan = await getShopPlan(shopDomain);
+    if (!isTypeAllowedForPlan(shopPlan, type)) {
       return { intent, error: "This email isn't available on your current plan." };
     }
 
@@ -516,7 +515,7 @@ export const action = async ({ request }) => {
       bodyText,
       dropName,
       unsubscribeUrl: "#",
-      hideVaultdBranding: await shopHidesVaultdBranding(shopDomain),
+      hideVaultdBranding: planHidesVaultdBranding(shopPlan),
     };
 
     let html = "";

@@ -286,13 +286,20 @@ function shell({ boutiqueName, boutiqueLogo, brandColor, titleHtml, contentHtml,
             <tr>
               <td style="padding: 16px 24px 20px 24px; border-top: 1px solid #f0f0f0; font-size: 11px; color: #888888;">
                 <p style="margin: 0 0 8px 0; line-height: 1.5;">
-                  You received this because of your activity on the <strong>${escapeHtml(boutiqueName || "")}</strong> waitlist. If this wasn't you, please
+                  You received this because of your activity on ${boutiqueName ? `the <strong>${escapeHtml(boutiqueName)}</strong>` : "this"} waitlist. If this wasn't you, please
                   ${unsubscribeUrl ? `<a href="${escapeHtml(unsubscribeUrl)}" style="color: #555555; text-decoration: underline;">unsubscribe</a>` : "unsubscribe"}.
                 </p>
-                <div style="margin: 8px 0; height: 1px; background-color: #e5e5e5;"></div>
+                ${
+                  // En marque blanche sans nom de marque saisi, cette ligne
+                  // serait un <strong> vide precede d'un filet : on retire
+                  // le bloc entier plutot que d'afficher une signature vide.
+                  boutiqueName || !hideVaultdBranding
+                    ? `<div style="margin: 8px 0; height: 1px; background-color: #e5e5e5;"></div>
                 <p style="margin: 8px 0 0 0; text-align: center;">
                   <strong>${escapeHtml(boutiqueName || "")}${hideVaultdBranding ? "" : " × Vaultd"}</strong>
-                </p>
+                </p>`
+                    : ""
+                }
               </td>
             </tr>
           </table>
