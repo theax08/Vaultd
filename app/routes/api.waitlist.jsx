@@ -86,6 +86,11 @@ export const action = async ({ request }) => {
     // marchand GROWTH qui n'a jamais paye PRO.
     const rankUpdateFeatureActive = (PLAN_FEATURES[account?.plan] ?? []).includes("automated_emails");
 
+    // Marque blanche (Elite) : verifiee sur le plan ACTUEL a chaque envoi,
+    // comme les autres gates — une retrogradation doit faire revenir la
+    // mention Vaultd immediatement, pas au prochain redeploiement.
+    const hideVaultdBranding = (PLAN_FEATURES[account?.plan] ?? []).includes("white_label");
+
     // Honeypot / timing / rate-limit (toujours actifs) + Turnstile (si
     // active par le marchand). On reste volontairement vague dans la
     // reponse pour ne pas aider un bot a affiner son comportement.
@@ -207,6 +212,7 @@ export const action = async ({ request }) => {
               position: currentPosition,
               previousPosition,
               unsubscribeUrl: buildUnsubscribeUrl(e.id),
+              hideVaultdBranding,
             });
           } catch (err) {
             console.error("waitlist: failed to send rank update email for", e.email, err);
@@ -240,6 +246,7 @@ export const action = async ({ request }) => {
             dropName: drop.name,
             position,
             unsubscribeUrl: buildUnsubscribeUrl(entry.id),
+            hideVaultdBranding,
           });
         } else if (!automation) {
           console.warn(

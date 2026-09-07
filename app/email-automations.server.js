@@ -21,6 +21,7 @@ export async function sendWaitlistConfirmationEmail({
   dropName,
   position,
   unsubscribeUrl,
+  hideVaultdBranding,
 }) {
   const vars = { drop_name: dropName, position, brand_name: boutiqueName };
   const html = renderWaitlistConfirmationEmail({
@@ -31,6 +32,7 @@ export async function sendWaitlistConfirmationEmail({
     dropName,
     position,
     unsubscribeUrl,
+    hideVaultdBranding,
   });
 
   await sendEmail({ to, subject: renderTemplate(subject, vars), html, from: buildFromHeader(boutiqueName) });
@@ -50,6 +52,7 @@ export async function sendWaitlistRankUpdateEmail({
   position,
   previousPosition,
   unsubscribeUrl,
+  hideVaultdBranding,
 }) {
   const vars = { drop_name: dropName, position, brand_name: boutiqueName };
   const html = renderWaitlistRankUpdateEmail({
@@ -61,6 +64,7 @@ export async function sendWaitlistRankUpdateEmail({
     position,
     previousPosition,
     unsubscribeUrl,
+    hideVaultdBranding,
   });
 
   await sendEmail({ to, subject: renderTemplate(subject, vars), html, from: buildFromHeader(boutiqueName) });
@@ -84,6 +88,7 @@ export async function sendDropLiveEmail({
   linkValidHoursLabel,
   maxUnits,
   unsubscribeUrl,
+  hideVaultdBranding,
 }) {
   const vars = { drop_name: dropName, position, brand_name: boutiqueName, access_link: accessLink };
   const html = renderDropLiveEmail({
@@ -99,6 +104,7 @@ export async function sendDropLiveEmail({
     linkValidHoursLabel,
     maxUnits,
     unsubscribeUrl,
+    hideVaultdBranding,
   });
 
   await sendEmail({ to, subject: renderTemplate(subject, vars), html, from: buildFromHeader(boutiqueName) });
@@ -125,6 +131,7 @@ export async function sendEarlyAccessEmail({
   maxUnits,
   ctaUrl,
   unsubscribeUrl,
+  hideVaultdBranding,
 }) {
   const vars = {
     drop_name: dropName,
@@ -148,6 +155,7 @@ export async function sendEarlyAccessEmail({
     maxUnits,
     ctaUrl,
     unsubscribeUrl,
+    hideVaultdBranding,
   });
 
   await sendEmail({ to, subject: renderTemplate(subject, vars), html, from: buildFromHeader(boutiqueName) });
@@ -172,6 +180,7 @@ export async function sendDropEndedEmail({
   nextDropName,
   nextDropCtaUrl,
   unsubscribeUrl,
+  hideVaultdBranding,
 }) {
   const vars = { drop_name: dropName, brand_name: boutiqueName };
   const html = renderDropEndedEmail({
@@ -188,6 +197,7 @@ export async function sendDropEndedEmail({
     nextDropName,
     nextDropCtaUrl,
     unsubscribeUrl,
+    hideVaultdBranding,
   });
 
   await sendEmail({ to, subject: renderTemplate(subject, vars), html, from: buildFromHeader(boutiqueName) });

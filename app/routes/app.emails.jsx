@@ -1,7 +1,7 @@
 // app/routes/app.emails.jsx
 
 import { useLoaderData, useActionData, useSubmit, useFetcher, Link } from "react-router";
-import { PLAN_ORDER } from "../vaultd-plans";
+import { PLAN_ORDER, PLAN_FEATURES } from "../vaultd-plans";
 import { useState, useEffect, useRef } from "react";
 import {
   popFontFamily,
@@ -49,6 +49,20 @@ async function isTypeAllowedForShop(shopDomain, type) {
     return PLAN_ORDER.indexOf(plan) >= PLAN_ORDER.indexOf(minPlan);
   } catch {
     // Un blip DB ne doit pas ouvrir l'acces a une fonctionnalite payante.
+    return false;
+  }
+}
+
+// L'apercu et le test doivent montrer l'email tel qu'il partira vraiment,
+// mentions Vaultd comprises (ou absentes en Elite) — sinon le marchand ne
+// peut pas verifier ce que son client recevra. Echec de lookup = on garde
+// le branding, jamais l'inverse.
+async function shopHidesVaultdBranding(shopDomain) {
+  try {
+    const { getAccountForShop } = await import("../vaultd-account.server");
+    const account = await getAccountForShop(shopDomain);
+    return (PLAN_FEATURES[account?.plan] ?? []).includes("white_label");
+  } catch {
     return false;
   }
 }
@@ -407,6 +421,7 @@ export const action = async ({ request }) => {
       body,
       dropName,
       unsubscribeUrl: "#",
+      hideVaultdBranding: await shopHidesVaultdBranding(shopDomain),
     };
 
     try {
@@ -501,6 +516,7 @@ export const action = async ({ request }) => {
       bodyText,
       dropName,
       unsubscribeUrl: "#",
+      hideVaultdBranding: await shopHidesVaultdBranding(shopDomain),
     };
 
     let html = "";

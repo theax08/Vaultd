@@ -228,7 +228,12 @@ function noteBlock(html, brandColor) {
     </table>`;
 }
 
-function shell({ boutiqueName, boutiqueLogo, brandColor, titleHtml, contentHtml, unsubscribeUrl }) {
+// hideVaultdBranding : marque blanche, incluse au plan Elite. Retire les
+// deux seules mentions de Vaultd visibles par le client final ("Powered by
+// Vaultd" en en-tete, "Marque × Vaultd" en pied). Le reste du pied de page
+// (raison de reception + lien de desinscription) est conserve : c'est une
+// obligation legale, pas du branding.
+function shell({ boutiqueName, boutiqueLogo, brandColor, titleHtml, contentHtml, unsubscribeUrl, hideVaultdBranding }) {
   return `
 <!DOCTYPE html>
 <html lang="en" style="margin:0; padding:0;">
@@ -262,7 +267,7 @@ function shell({ boutiqueName, boutiqueLogo, brandColor, titleHtml, contentHtml,
                       </table>
                     </td>
                     <td align="right" valign="middle" style="font-size: 11px; color: #a0a0a0; white-space: nowrap;">
-                      Powered by Vaultd
+                      ${hideVaultdBranding ? "" : "Powered by Vaultd"}
                     </td>
                   </tr>
                 </table>
@@ -286,7 +291,7 @@ function shell({ boutiqueName, boutiqueLogo, brandColor, titleHtml, contentHtml,
                 </p>
                 <div style="margin: 8px 0; height: 1px; background-color: #e5e5e5;"></div>
                 <p style="margin: 8px 0 0 0; text-align: center;">
-                  <strong>${escapeHtml(boutiqueName || "")} × Vaultd</strong>
+                  <strong>${escapeHtml(boutiqueName || "")}${hideVaultdBranding ? "" : " × Vaultd"}</strong>
                 </p>
               </td>
             </tr>
@@ -313,6 +318,7 @@ export function renderWaitlistConfirmationEmail({
   dropName,
   position,
   unsubscribeUrl,
+  hideVaultdBranding,
 }) {
   const contentHtml = `
     ${paragraphsHtml(bodyText)}
@@ -334,6 +340,7 @@ export function renderWaitlistConfirmationEmail({
     titleHtml: "You're in.",
     contentHtml,
     unsubscribeUrl,
+    hideVaultdBranding,
   });
 }
 
@@ -346,6 +353,7 @@ export function renderWaitlistRankUpdateEmail({
   position,
   previousPosition,
   unsubscribeUrl,
+  hideVaultdBranding,
 }) {
   const movedUp = previousPosition != null && position < previousPosition;
   const delta = previousPosition != null ? Math.abs(position - previousPosition) : null;
@@ -375,6 +383,7 @@ export function renderWaitlistRankUpdateEmail({
     titleHtml: "Your position was updated.",
     contentHtml,
     unsubscribeUrl,
+    hideVaultdBranding,
   });
 }
 
@@ -391,6 +400,7 @@ export function renderDropLiveEmail({
   linkValidHoursLabel,
   maxUnits,
   unsubscribeUrl,
+  hideVaultdBranding,
 }) {
   const contentHtml = `
     ${paragraphsHtml(bodyText)}
@@ -422,6 +432,7 @@ export function renderDropLiveEmail({
     titleHtml: "It's on.",
     contentHtml,
     unsubscribeUrl,
+    hideVaultdBranding,
   });
 }
 
@@ -439,6 +450,7 @@ export function renderEarlyAccessEmail({
   maxUnits,
   ctaUrl,
   unsubscribeUrl,
+  hideVaultdBranding,
 }) {
   const total = Number(waitlistCount);
   const contentHtml = `
@@ -469,6 +481,7 @@ export function renderEarlyAccessEmail({
     titleHtml: "You're in early.<br/>Here's the store password.",
     contentHtml,
     unsubscribeUrl,
+    hideVaultdBranding,
   });
 }
 
@@ -486,6 +499,7 @@ export function renderDropEndedEmail({
   nextDropName,
   nextDropCtaUrl,
   unsubscribeUrl,
+  hideVaultdBranding,
 }) {
   const contentHtml = `
     ${paragraphsHtml(bodyText)}
@@ -527,5 +541,6 @@ export function renderDropEndedEmail({
     titleHtml: "It's a wrap.",
     contentHtml,
     unsubscribeUrl,
+    hideVaultdBranding,
   });
 }

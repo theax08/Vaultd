@@ -62,6 +62,9 @@ async function notifyWaitlist(drop, type) {
   }
   if (!(PLAN_FEATURES[account?.plan] ?? []).includes("automated_emails")) return;
 
+  // Marque blanche Elite : lue sur le plan actuel, comme le gate ci-dessus.
+  const hideVaultdBranding = (PLAN_FEATURES[account?.plan] ?? []).includes("white_label");
+
   const entries = await db.waitlistEntry.findMany({
     where: { dropId: drop.id, unsubscribedAt: null },
     orderBy: [{ score: "desc" }, { createdAt: "asc" }],
@@ -92,6 +95,7 @@ async function notifyWaitlist(drop, type) {
           accessLink: withEmailTrackingParam(automation.ctaUrl) || null,
           maxUnits: drop.maxUnits,
           unsubscribeUrl: buildUnsubscribeUrl(entry.id),
+          hideVaultdBranding,
         });
       } catch (err) {
         console.error("notifyWaitlist: failed to send DROP_LIVE to", entry.email, err);
@@ -129,6 +133,7 @@ async function notifyWaitlist(drop, type) {
         nextDropName: nextDrop?.name || null,
         nextDropCtaUrl: withEmailTrackingParam(automation.ctaUrl) || null,
         unsubscribeUrl: buildUnsubscribeUrl(entry.id),
+        hideVaultdBranding,
       });
     } catch (err) {
       console.error("notifyWaitlist: failed to send DROP_ENDED to", entry.email, err);
@@ -311,6 +316,19 @@ export async function sendDueEarlyAccessEmails(shopDomain) {
     },
   });
 
+  if (candidates.length === 0) return [];
+
+  // Marque blanche Elite. Lue ici plutot que recue en parametre pour que la
+  // fonction reste correcte si elle est appelee directement un jour, et
+  // seulement apres avoir confirme qu'il y a quelque chose a envoyer.
+  let hideVaultdBranding = false;
+  try {
+    const account = await getAccountForShop(shopDomain);
+    hideVaultdBranding = (PLAN_FEATURES[account?.plan] ?? []).includes("white_label");
+  } catch (err) {
+    console.error("earlyAccess: account lookup failed, keeping Vaultd branding", shopDomain, err);
+  }
+
   const sent = [];
 
   for (const drop of candidates) {
@@ -396,6 +414,7 @@ export async function sendDueEarlyAccessEmails(shopDomain) {
             maxUnits: drop.maxUnits,
             ctaUrl: withEmailTrackingParam(automation.ctaUrl) || null,
             unsubscribeUrl: buildUnsubscribeUrl(entry.id),
+            hideVaultdBranding,
           });
         } catch (err) {
           console.error("earlyAccess: failed to send to", entry.email, err);

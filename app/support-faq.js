@@ -48,6 +48,11 @@ export const SUPPORT_CATEGORIES = [
           "Once a drop is ENDED, its email automations are locked to keep the historical record consistent. Create or pick an active/upcoming drop instead.",
       },
       {
+        question: "Can I remove the Vaultd branding from my emails?",
+        answer:
+          "Yes, on the Elite plan. The two Vaultd mentions are removed automatically from every customer email — the \"Powered by Vaultd\" line in the header and the \"Your brand × Vaultd\" line in the footer. There's no setting to toggle: it follows your plan. It applies to all five emails and to the preview and test send, so what you see in the editor is exactly what your customers receive. The line explaining why they got the email and the unsubscribe link stay in place — those are required for compliance, not branding. If your plan later drops below Elite, the mentions come back on the next email sent.",
+      },
+      {
         question: "How does the early access password email work?",
         answer:
           "On the Elite plan, you can send your store password to the top of a drop's waitlist before the public launch. Turn it on in the drop editor, where you also set how many people from the top of the list receive it and how many minutes before launch it goes out. You paste the store password there yourself — Shopify doesn't expose the storefront password through its API, so copy it from Online Store → Preferences. The wording, subject and branding are edited in Emails → Early access, like any other Vaultd email. Two things to know: keep password protection enabled in Shopify until the drop opens (changing or disabling it makes the password you sent useless), and remember it's one shared password, so treat it as a head start for your top members rather than a private door.",

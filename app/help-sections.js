@@ -53,6 +53,18 @@ export const SECTIONS = [
     ],
   },
   {
+    key: "white_label",
+    title: "No Vaultd branding in emails",
+    minPlan: "ELITE",
+    intro: "Your customer emails go out with your brand only — no Vaultd mention.",
+    tips: [
+      "On Elite, the two Vaultd mentions in every customer email are removed automatically: the \"Powered by Vaultd\" line in the header, and the \"Your brand × Vaultd\" line in the footer. There's nothing to switch on.",
+      "It applies to all five emails — waitlist confirmation, rank update, early access, drop live and drop ended — and to the preview and test send, so what you see is what your customers get.",
+      "The rest of the footer stays: the line explaining why they received the email and the unsubscribe link. Those aren't branding, they're required for the emails to remain compliant.",
+      "If your plan drops below Elite, the Vaultd mentions come back on the next email sent — the check runs against your current plan at send time, not at the moment the drop was created.",
+    ],
+  },
+  {
     key: "early_access",
     title: "Early access password email",
     minPlan: "ELITE",

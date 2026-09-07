@@ -41,7 +41,7 @@ const PLAN_FEATURE_ADDITIONS = {
   GROWTH: ["waitlist", "waitlist_limit", "drop_history", "hype_widgets"],
   PRO: ["referral", "automated_emails", "color_blue", "color_red"],
   SCALE: ["automatic_launch", "unlimited_drops", "color_violet"],
-  ELITE: ["bot_protection", "multi_store", "early_access", "priority_support", "color_gold"],
+  ELITE: ["bot_protection", "multi_store", "early_access", "white_label", "priority_support", "color_gold"],
 };
 
 const FEATURE_LABELS = {
@@ -55,6 +55,7 @@ const FEATURE_LABELS = {
   bot_protection: "Bot protection",
   multi_store: "Multi-store accounts",
   early_access: "Early access password emails",
+  white_label: "No Vaultd branding in emails",
   priority_support: "Priority support",
   color_blue: "Blue accent color",
   color_red: "Red accent color",
