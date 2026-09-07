@@ -25,6 +25,56 @@ const TYPES = {
   EARLY_ACCESS: "EARLY_ACCESS",
 };
 
+// Valeurs d'exemple de l'apercu/test early access. On lit les VRAIES
+// valeurs du drop d'apercu selectionne (mot de passe, unites, horaires,
+// seuil) au lieu d'un jeu fige : sinon le marchand qui a saisi son propre
+// mot de passe et 12 unites voit "SUMMER-001" et "200 units", et en conclut
+// que la fonctionnalite ne lit pas ses reglages.
+const EARLY_ACCESS_FALLBACK = {
+  position: 12,
+  threshold: 50,
+  waitlistCount: 2731,
+  storePassword: "SUMMER-001",
+  accessOpensLabel: "Fri, Oct 10, 1:00 PM",
+  publicStartLabel: "Fri, Oct 10, 3:00 PM",
+  maxUnits: 200,
+};
+
+async function earlyAccessSampleFor(db, shopDomain, dropExternalId) {
+  if (!dropExternalId) return EARLY_ACCESS_FALLBACK;
+
+  const drop = await db.drop.findFirst({ where: { shopDomain, externalId: dropExternalId } });
+  if (!drop) return EARLY_ACCESS_FALLBACK;
+
+  const waitlistCount = await db.waitlistEntry.count({
+    where: { dropId: drop.id, unsubscribedAt: null },
+  });
+
+  const dateOpts = { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" };
+  let accessOpensLabel = null;
+  let publicStartLabel = null;
+  if (drop.startTime) {
+    const startMs = new Date(drop.startTime).getTime();
+    publicStartLabel = new Date(startMs).toLocaleString("en-US", dateOpts);
+    accessOpensLabel = new Date(
+      startMs - (drop.earlyAccessMinutesBefore || 0) * 60 * 1000
+    ).toLocaleString("en-US", dateOpts);
+  }
+
+  const threshold = drop.earlyAccessThreshold || EARLY_ACCESS_FALLBACK.threshold;
+  return {
+    // Un destinataire reel est forcement dans le seuil : ne jamais montrer
+    // une position au-dela, ce serait quelqu'un qui ne recoit pas l'email.
+    position: Math.min(EARLY_ACCESS_FALLBACK.position, threshold),
+    threshold,
+    waitlistCount: waitlistCount || threshold,
+    storePassword: drop.storePassword || "(set the store password on this drop)",
+    accessOpensLabel,
+    publicStartLabel,
+    maxUnits: drop.maxUnits ?? EARLY_ACCESS_FALLBACK.maxUnits,
+  };
+}
+
 const SUBJECT_RECOMMENDED_LIMIT = 60;
 const PREVIEW_SAMPLE_POSITION = 248;
 const HEX_COLOR_RE = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
@@ -295,6 +345,7 @@ export const action = async ({ request }) => {
     const mainColor = formData.get("mainColor")?.toString() || "#1a1a1a";
     const ctaUrl = formData.get("ctaUrl")?.toString() || null;
     const dropName = formData.get("dropName")?.toString() || "";
+    const dropExternalId = formData.get("dropExternalId")?.toString() || "";
     const to = formData.get("to")?.toString().trim() || "";
 
     if (!dropName) {
@@ -352,15 +403,10 @@ export const action = async ({ request }) => {
           nextDropCtaUrl: ctaUrl,
         });
       } else if (type === TYPES.EARLY_ACCESS) {
+        const sample = await earlyAccessSampleFor(db, shopDomain, dropExternalId);
         await emailAutomations.sendEarlyAccessEmail({
           ...shared,
-          position: 12,
-          threshold: 50,
-          waitlistCount: 2731,
-          storePassword: "SUMMER-001",
-          accessOpensLabel: "Fri, Oct 10, 1:00 PM",
-          publicStartLabel: "Fri, Oct 10, 3:00 PM",
-          maxUnits: 200,
+          ...sample,
           ctaUrl,
         });
       } else {
@@ -388,20 +434,26 @@ export const action = async ({ request }) => {
     const logoUrl = formData.get("logoUrl")?.toString() || "";
     const ctaUrl = formData.get("ctaUrl")?.toString() || "";
     const dropName = formData.get("dropName")?.toString() || "Your Drop";
+    const dropExternalId = formData.get("dropExternalId")?.toString() || "";
 
     const templates = await import("../email-templates");
-    // Valeurs d'exemple pour l'apercu. Les cles propres a l'early access
-    // (threshold/waitlist_count/store_password) doivent y figurer aussi,
-    // sinon renderTemplate les remplace par du vide et le corps par defaut
-    // s'affiche avec un trou au milieu d'une phrase.
+    // Les cles propres a l'early access doivent figurer dans vars, sinon
+    // renderTemplate les remplace par du vide et le corps par defaut
+    // s'affiche avec un trou au milieu d'une phrase. Elles viennent du vrai
+    // drop d'apercu quand il y en a un, pour que ce que le marchand lit
+    // corresponde a ce qu'il a saisi dans l'editeur de drop.
+    const earlySample =
+      type === TYPES.EARLY_ACCESS
+        ? await earlyAccessSampleFor(db, shopDomain, dropExternalId)
+        : null;
     const vars = {
       drop_name: dropName,
-      position: type === TYPES.EARLY_ACCESS ? 12 : PREVIEW_SAMPLE_POSITION,
+      position: earlySample ? earlySample.position : PREVIEW_SAMPLE_POSITION,
       brand_name: brandName,
       access_link: ctaUrl,
-      threshold: 50,
-      waitlist_count: 2731,
-      store_password: "SUMMER-001",
+      threshold: earlySample?.threshold ?? EARLY_ACCESS_FALLBACK.threshold,
+      waitlist_count: earlySample?.waitlistCount ?? EARLY_ACCESS_FALLBACK.waitlistCount,
+      store_password: earlySample?.storePassword ?? EARLY_ACCESS_FALLBACK.storePassword,
     };
     const resolvedSubject = templates.renderTemplate(subject, vars);
     const bodyText = templates.renderTemplate(body, vars);
@@ -448,12 +500,7 @@ export const action = async ({ request }) => {
     } else if (type === TYPES.EARLY_ACCESS) {
       html = templates.renderEarlyAccessEmail({
         ...shared,
-        position: 12,
-        waitlistCount: 2731,
-        storePassword: "SUMMER-001",
-        accessOpensLabel: "Fri, Oct 10, 1:00 PM",
-        publicStartLabel: "Fri, Oct 10, 3:00 PM",
-        maxUnits: 200,
+        ...earlySample,
         ctaUrl: ctaUrl || "#",
       });
     } else {
@@ -765,6 +812,7 @@ export default function EmailsPage() {
         mainColor,
         ctaUrl: ctaUrls[type] ?? "",
         dropName: previewDropQuery,
+        dropExternalId: previewDropExternalId || "",
         to: testEmail,
       },
       { method: "post" }
@@ -787,13 +835,14 @@ export default function EmailsPage() {
           logoUrl: logoUrl || "",
           ctaUrl: ctaUrls[openEmailType] || "",
           dropName: previewDropName,
+          dropExternalId: previewDropExternalId || "",
         },
         { method: "post" }
       );
     }, 400);
     return () => clearTimeout(timer);
     // eslint-disable-next-line
-  }, [openEmailType, subjects[openEmailType], bodies[openEmailType], ctaUrls[openEmailType], brandName, mainColor, logoUrl, previewDropName]);
+  }, [openEmailType, subjects[openEmailType], bodies[openEmailType], ctaUrls[openEmailType], brandName, mainColor, logoUrl, previewDropName, previewDropExternalId]);
 
   return (
     <div style={{ fontFamily: popFontFamily, minHeight: "100vh", display: "flex", flexDirection: "column" }}>
