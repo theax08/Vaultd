@@ -360,6 +360,19 @@ export async function sendDueEarlyAccessEmails(shopDomain) {
         continue;
       }
 
+      // Reservation atomique AVANT d'envoyer quoi que ce soit. Ce balayage
+      // tourne depuis le cron ET depuis trois loaders admin qui pollent
+      // (app.drops, app.live, app.drops-history) : deux passages simultanes
+      // liraient tous les deux earlyAccessSentAt: null et enverraient le
+      // mot de passe deux fois aux memes clients. updateMany conditionne
+      // sur null : un seul passage obtient count > 0. Meme protection que
+      // launchDrop avec son where:status:"DRAFT".
+      const claim = await db.drop.updateMany({
+        where: { id: drop.id, earlyAccessSentAt: null },
+        data: { earlyAccessSentAt: new Date() },
+      });
+      if (claim.count === 0) continue;
+
       const dateOpts = { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" };
       const accessOpensLabel = new Date(sendFromMs).toLocaleString("en-US", dateOpts);
       const publicStartLabel = new Date(startMs).toLocaleString("en-US", dateOpts);
@@ -393,7 +406,10 @@ export async function sendDueEarlyAccessEmails(shopDomain) {
         }
       }
 
-      await db.drop.update({ where: { id: drop.id }, data: { earlyAccessSentAt: new Date() } });
+      // Pas de verrou a poser ici : le drop a deja ete reserve avant les
+      // envois. Un echec partiel n'est pas rejoue — pour un envoi de masse,
+      // rater un email vaut mieux que renvoyer le mot de passe a tout le
+      // monde au passage suivant (meme arbitrage que launchDrop).
       sent.push(drop.id);
     } catch (err) {
       console.error("sendDueEarlyAccessEmails: failed for drop", drop.id, err);

@@ -1344,7 +1344,12 @@ export default function DropsPage() {
                             <span style={toggleSwitchKnobStyle(earlyAccessEnabled)} />
                           </button>
                         </div>
-                        {earlyAccessEnabled && (
+                        {/* Masque plutot que demonte : un champ absent du DOM
+                            n'est pas soumis, donc couper le toggle puis
+                            enregistrer effacerait silencieusement le mot de
+                            passe et remettrait seuil/delai a leurs valeurs
+                            par defaut. */}
+                        <div style={{ display: earlyAccessEnabled ? "block" : "none" }}>
                           <>
                             <p style={{ fontSize: 12, color: "#6d7175", margin: "4px 0 10px 0" }}>
                               Sends your store password to the top of the waitlist before the public launch. Edit the email itself in Emails.
@@ -1404,7 +1409,7 @@ export default function DropsPage() {
                               Keep password protection turned on in your Shopify settings until the drop opens — if you disable it or change the password after this email goes out, the one your customers received stops working.
                             </p>
                           </>
-                        )}
+                        </div>
                       </>
                     ) : (
                       <LockedFeatureNotice title="Early access password email" minPlanLabel="the Elite plan" />

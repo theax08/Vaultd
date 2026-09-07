@@ -329,7 +329,14 @@ export const loader = async ({ params, request }) => {
   // waitlistCount/unsubscribed counts above already read everything needed
   // from waitlistEntries — the raw array (customer emails/names) has no use
   // on the client and shouldn't ship in the response.
-  const { waitlistEntries: _waitlistEntries, ...dropWithoutEntries } = drop;
+  // storePassword est le mot de passe boutique saisi pour l'early access :
+  // un secret, qui n'a rien a faire dans la reponse d'une page d'historique
+  // qui ne l'affiche jamais. Meme raisonnement que waitlistEntries.
+  const {
+    waitlistEntries: _waitlistEntries,
+    storePassword: _storePassword,
+    ...dropWithoutEntries
+  } = drop;
 
   return {
     drop: dropWithoutEntries,

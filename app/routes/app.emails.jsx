@@ -25,6 +25,34 @@ const TYPES = {
   EARLY_ACCESS: "EARLY_ACCESS",
 };
 
+const TYPE_TO_STEP = {
+  [TYPES.WAITLIST_CONFIRMATION]: "waitlist",
+  [TYPES.WAITLIST_RANK_UPDATE]: "rank_update",
+  [TYPES.EARLY_ACCESS]: "early_access",
+  [TYPES.DROP_LIVE]: "live",
+  [TYPES.DROP_ENDED]: "ended",
+};
+
+// Le client masque les types verrouilles, mais rien cote serveur ne
+// l'empechait : un POST direct de SEND_TEST/RENDER_PREVIEW passait pour
+// n'importe quel palier. Peu grave pour les autres emails, mais l'early
+// access envoie le VRAI mot de passe boutique — on verifie donc le plan
+// cote serveur, comme partout ailleurs dans l'app. STEP_MIN_PLAN reste la
+// source unique des paliers (definie plus bas, lue a l'execution).
+async function isTypeAllowedForShop(shopDomain, type) {
+  const minPlan = STEP_MIN_PLAN[TYPE_TO_STEP[type]];
+  if (!minPlan) return false;
+  try {
+    const { getAccountForShop } = await import("../vaultd-account.server");
+    const account = await getAccountForShop(shopDomain);
+    const plan = PLAN_ORDER.includes(account?.plan) ? account.plan : null;
+    return PLAN_ORDER.indexOf(plan) >= PLAN_ORDER.indexOf(minPlan);
+  } catch {
+    // Un blip DB ne doit pas ouvrir l'acces a une fonctionnalite payante.
+    return false;
+  }
+}
+
 // Valeurs d'exemple de l'apercu/test early access. On lit les VRAIES
 // valeurs du drop d'apercu selectionne (mot de passe, unites, horaires,
 // seuil) au lieu d'un jeu fige : sinon le marchand qui a saisi son propre
@@ -357,6 +385,9 @@ export const action = async ({ request }) => {
     if (isTestSendRateLimited(shopDomain)) {
       return { intent, type, error: "Too many test emails sent — wait a minute and try again." };
     }
+    if (!(await isTypeAllowedForShop(shopDomain, type))) {
+      return { intent, type, error: "This email isn't available on your current plan." };
+    }
 
     const [emailAutomations, { buildLogoUrl }] = await Promise.all([
       import("../email-automations.server"),
@@ -435,6 +466,10 @@ export const action = async ({ request }) => {
     const ctaUrl = formData.get("ctaUrl")?.toString() || "";
     const dropName = formData.get("dropName")?.toString() || "Your Drop";
     const dropExternalId = formData.get("dropExternalId")?.toString() || "";
+
+    if (!(await isTypeAllowedForShop(shopDomain, type))) {
+      return { intent, error: "This email isn't available on your current plan." };
+    }
 
     const templates = await import("../email-templates");
     // Les cles propres a l'early access doivent figurer dans vars, sinon
@@ -521,6 +556,15 @@ export const action = async ({ request }) => {
 // waitlist (mise a jour de position/referral) — reservee a PRO+, meme si
 // la confirmation de waitlist reste dispo des GROWTH.
 const STEP_MIN_PLAN = { waitlist: "GROWTH", rank_update: "PRO", early_access: "ELITE", live: "PRO", ended: "PRO" };
+
+// Le palier requis differe selon le groupe (Pro pour live/ended, Elite pour
+// early access) : l'afficher en dur ferait dire "Available on the Pro plan"
+// sur une carte reservee a Elite, et un marchand pourrait monter en Pro
+// pour une fonctionnalite qu'il n'aurait toujours pas.
+function stepMinPlanLabel(stepId) {
+  const key = STEP_MIN_PLAN[stepId] ?? "PRO";
+  return key.charAt(0) + key.slice(1).toLowerCase();
+}
 
 function isStepLocked(stepId, plan) {
   const minPlan = STEP_MIN_PLAN[stepId] ?? "PRO";
@@ -931,7 +975,9 @@ export default function EmailsPage() {
             >
               {group.label}
               {locked && (
-                <span style={{ fontSize: 10.5, fontWeight: 600, color: "var(--vd-ink-3, #8B93A0)" }}>Pro</span>
+                <span style={{ fontSize: 10.5, fontWeight: 600, color: "var(--vd-ink-3, #8B93A0)" }}>
+                  {stepMinPlanLabel(group.id)}
+                </span>
               )}
               {!locked && inactiveCount > 0 && (
                 <span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--vd-sched-fg, #7A5600)" }}>
@@ -947,21 +993,19 @@ export default function EmailsPage() {
         {/* ===== Niveau 2 — accordéon vertical des e-mails du groupe ===== */}
         <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px 32px" }}>
           {isStepLocked(selectedGroup.id, plan) ? (
-            <LockedGroupPanel planName="Pro" />
+            <LockedGroupPanel planName={stepMinPlanLabel(selectedGroup.id)} />
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {selectedGroup.types.map((type, index) => {
-                const typeLocked = isStepLocked(
-                  type === TYPES.WAITLIST_RANK_UPDATE ? "rank_update" : selectedGroup.id,
-                  plan
-                );
+                const stepId = type === TYPES.WAITLIST_RANK_UPDATE ? "rank_update" : selectedGroup.id;
+                const typeLocked = isStepLocked(stepId, plan);
                 if (typeLocked) {
                   return (
                     <LockedCard
                       key={type}
                       title={CONFIG_BY_TYPE[type].title}
                       description={CONFIG_BY_TYPE[type].description}
-                      planName="Pro"
+                      planName={stepMinPlanLabel(stepId)}
                     />
                   );
                 }
