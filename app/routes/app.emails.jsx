@@ -63,8 +63,8 @@ const EARLY_ACCESS_FALLBACK = {
   threshold: 50,
   waitlistCount: 2731,
   storePassword: "SUMMER-001",
-  accessOpensLabel: "Fri, Oct 10, 1:00 PM",
-  publicStartLabel: "Fri, Oct 10, 3:00 PM",
+  accessOpensLabel: "Fri, Oct 10, 1:00 PM UTC",
+  publicStartLabel: "Fri, Oct 10, 3:00 PM UTC",
   maxUnits: 200,
 };
 
@@ -78,15 +78,15 @@ async function earlyAccessSampleFor(db, shopDomain, dropExternalId) {
     where: { dropId: drop.id, unsubscribedAt: null },
   });
 
-  const dateOpts = { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" };
+  const { formatEmailDateTime } = await import("../email-templates");
   let accessOpensLabel = null;
   let publicStartLabel = null;
   if (drop.startTime) {
     const startMs = new Date(drop.startTime).getTime();
-    publicStartLabel = new Date(startMs).toLocaleString("en-US", dateOpts);
-    accessOpensLabel = new Date(
+    publicStartLabel = formatEmailDateTime(startMs);
+    accessOpensLabel = formatEmailDateTime(
       startMs - (drop.earlyAccessMinutesBefore || 0) * 60 * 1000
-    ).toLocaleString("en-US", dateOpts);
+    );
   }
 
   const threshold = drop.earlyAccessThreshold || EARLY_ACCESS_FALLBACK.threshold;
@@ -389,9 +389,10 @@ export const action = async ({ request }) => {
       return { intent, type, error: "This email isn't available on your current plan." };
     }
 
-    const [emailAutomations, { buildLogoUrl }] = await Promise.all([
+    const [emailAutomations, { buildLogoUrl }, templatesForLabels] = await Promise.all([
       import("../email-automations.server"),
       import("../unsubscribe.server"),
+      import("../email-templates"),
     ]);
 
     const automation = id ? await db.emailAutomation.findFirst({ where: { id, shopDomain } }) : null;
@@ -421,7 +422,7 @@ export const action = async ({ request }) => {
         await emailAutomations.sendDropLiveEmail({
           ...shared,
           position: PREVIEW_SAMPLE_POSITION,
-          openedLabel: new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
+          openedLabel: templatesForLabels.formatEmailTime(new Date()),
           accessLink: ctaUrl,
           maxUnits: 100,
         });
@@ -515,7 +516,7 @@ export const action = async ({ request }) => {
       html = templates.renderDropLiveEmail({
         ...shared,
         position: PREVIEW_SAMPLE_POSITION,
-        openedLabel: new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
+        openedLabel: templates.formatEmailTime(new Date()),
         closesInLabel: "6h",
         accessLink: ctaUrl || "#",
         linkValidHoursLabel: "6 hours",
@@ -525,7 +526,7 @@ export const action = async ({ request }) => {
       html = templates.renderDropEndedEmail({
         ...shared,
         soldOut: true,
-        closedAtLabel: new Date().toLocaleString("en-US"),
+        closedAtLabel: templates.formatEmailDateTime(new Date()),
         itemsSold: 30,
         selloutLabel: "6h03m",
         waitlistCount: PREVIEW_SAMPLE_POSITION,

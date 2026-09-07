@@ -1,6 +1,7 @@
 import db from "./db.server";
 import { sendDropLiveEmail, sendDropEndedEmail, sendEarlyAccessEmail } from "./email-automations.server";
 import { buildUnsubscribeUrl, buildLogoUrl } from "./unsubscribe.server";
+import { formatEmailDateTime, formatEmailTime } from "./email-templates";
 import { getAccountForShop } from "./vaultd-account.server";
 import { PLAN_FEATURES } from "./vaultd-plans";
 
@@ -72,9 +73,7 @@ async function notifyWaitlist(drop, type) {
   const brandColor = automation.mainColor || "#1a1a1a";
 
   if (type === "DROP_LIVE") {
-    const openedLabel = drop.startTime
-      ? drop.startTime.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
-      : null;
+    const openedLabel = formatEmailTime(drop.startTime);
 
     for (let i = 0; i < entries.length; i++) {
       const entry = entries[i];
@@ -104,9 +103,7 @@ async function notifyWaitlist(drop, type) {
   // DROP_ENDED
   const orders = await db.dropOrder.findMany({ where: { dropId: drop.id, shopDomain: drop.shopDomain } });
   const itemsSold = orders.reduce((sum, o) => sum + (o.itemCount || 0), 0);
-  const closedAtLabel = drop.endTime
-    ? drop.endTime.toLocaleString("en-US", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })
-    : null;
+  const closedAtLabel = formatEmailDateTime(drop.endTime);
 
   const nextDrop = await db.drop.findFirst({
     where: { shopDomain: drop.shopDomain, status: "DRAFT" },
@@ -373,9 +370,8 @@ export async function sendDueEarlyAccessEmails(shopDomain) {
       });
       if (claim.count === 0) continue;
 
-      const dateOpts = { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" };
-      const accessOpensLabel = new Date(sendFromMs).toLocaleString("en-US", dateOpts);
-      const publicStartLabel = new Date(startMs).toLocaleString("en-US", dateOpts);
+      const accessOpensLabel = formatEmailDateTime(sendFromMs);
+      const publicStartLabel = formatEmailDateTime(startMs);
       const boutiqueLogo = buildLogoUrl(automation);
       const brandColor = automation.mainColor || "#1a1a1a";
 

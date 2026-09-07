@@ -25,6 +25,40 @@ export function renderTemplate(text, vars) {
   });
 }
 
+// Les emails sont rendus cote serveur : toLocaleString y prendrait le
+// fuseau de l'HOTE (UTC sur Railway aujourd'hui, mais rien ne le
+// garantit). On force donc explicitement UTC et on l'affiche — sans quoi
+// le destinataire lit une heure ambigue qu'il suppose etre la sienne, et
+// se presente au mauvais moment. Forcer le fuseau ET l'ecrire vont
+// ensemble : afficher "UTC" sans le forcer serait un mensonge des que
+// l'hote change de fuseau.
+const EMAIL_TZ = "UTC";
+
+export function formatEmailDateTime(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return `${d.toLocaleString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: EMAIL_TZ,
+  })} UTC`;
+}
+
+export function formatEmailTime(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return `${d.toLocaleString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: EMAIL_TZ,
+  })} UTC`;
+}
+
 function paragraphsHtml(bodyText) {
   return String(bodyText || "")
     .split(/\n\s*\n/)
