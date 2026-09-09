@@ -2,6 +2,8 @@ import { useLoaderData, useRevalidator, Form } from "react-router";
 import { useState, useEffect } from "react";
 import { getActivePresenceCount } from "../presence.server";
 import { getAccountForShop } from "../vaultd-account.server";
+import { getDropCurrency } from "../shop-currency.server";
+import { formatMoney } from "../money";
 import { PLAN_ORDER } from "../vaultd-plans";
 import { PlanLockedPage, monoNumberStyle } from "../styles/pop-ui";
 
@@ -21,7 +23,7 @@ export const loader = async ({ request }) => {
     dbModule.client ??
     dbModule;
 
-  const { session } = await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
   const shopDomain = session.shop;
 
   // Un marchand qui a annule/downgrade son plan garde ses anciens drops, donc
@@ -117,6 +119,10 @@ export const loader = async ({ request }) => {
   );
 
   const orderCount = orders.length;
+  // Devise reelle de la boutique/du drop : sans elle tous les montants
+  // s affichaient en dollars quelle que soit la boutique du marchand.
+  const currencyCode = await getDropCurrency(drop, shopDomain, admin);
+
   const totalRevenue = orders.reduce(
     (sum, o) => sum + Number(o.totalAmount || 0),
     0
@@ -283,7 +289,7 @@ export const loader = async ({ request }) => {
       type: "ended",
       timestamp: drop.endTime,
       title: stockRemaining === 0 && drop.maxUnits > 0 ? "Drop ended — fully sold out" : "Drop ended",
-      description: `$${totalRevenue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} total revenue · ${orderCount} order${orderCount === 1 ? "" : "s"} confirmed`,
+      description: `${formatMoney(totalRevenue, currencyCode)} total revenue · ${orderCount} order${orderCount === 1 ? "" : "s"} confirmed`,
     });
   }
   timeline.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
@@ -376,6 +382,7 @@ export const loader = async ({ request }) => {
   };
 
   return {
+    currencyCode,
     drop: dropView,
     whoIsBuying,
     traffic: trafficView,
@@ -388,17 +395,11 @@ export const loader = async ({ request }) => {
 // CLIENT: Live Overlay UI
 // ===============================
 export default function LiveDashboardPage() {
-  const { locked, drop, whoIsBuying, traffic, topSellers, timeline } = useLoaderData();
+  const { locked, drop, whoIsBuying, traffic, topSellers, timeline, currencyCode } = useLoaderData();
   const revalidator = useRevalidator();
 
-  // L'app affiche tout en USD, sans conversion.
-  const formatMoney = (amount) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      maximumFractionDigits: 2,
-    }).format(Number(amount) || 0);
-  };
+  // Montants formates dans la devise de la boutique, pas en dollars.
+  const money = (amount) => formatMoney(amount, currencyCode);
 
   const [mode, setMode] = useState(
     drop.status === "ENDED" ? "analysis" : "speed"
@@ -790,7 +791,7 @@ export default function LiveDashboardPage() {
             <KpiCard
               label="Total revenue"
               borderColor="#818cf8"
-              value={formatMoney(drop.live.revenue)}
+              value={money(drop.live.revenue)}
               valueColor="#111827"
               sublabel={`${drop.totalItems} items`}
               subColor="#6b7280"
@@ -975,7 +976,7 @@ export default function LiveDashboardPage() {
 
           {mode === "analysis" && (
             <div style={{ marginTop: 18, display: "flex", flexDirection: "column", gap: 14, flex: 1, minHeight: 0 }}>
-              <TopSellersBoard topSellers={topSellers} />
+              <TopSellersBoard topSellers={topSellers} currencyCode={currencyCode} />
               <DropTimelineBoard timeline={timeline} style={{ flex: 1, minHeight: 220 }} />
             </div>
           )}
@@ -1126,7 +1127,7 @@ export default function LiveDashboardPage() {
                   >
                     Total revenue{" "}
                     <strong>
-                      {formatMoney(drop.final.revenue)}
+                      {money(drop.final.revenue)}
                     </strong>
                     , {drop.final.orderCount} orders, avg cart size{" "}
                     <strong>{drop.final.avgCartSize.toFixed(2)}</strong> items,
@@ -1517,7 +1518,7 @@ function ConversionFunnelBoard({ visitors, waitlistTotal, orderCount, conversion
 /**
  * TOP SELLERS — classement des produits par unites vendues (mode Analysis).
  */
-function TopSellersBoard({ topSellers }) {
+function TopSellersBoard({ topSellers, currencyCode }) {
   const maxUnits = Math.max(1, ...topSellers.map((p) => p.unitsSold));
 
   return (
@@ -1574,7 +1575,7 @@ function TopSellersBoard({ topSellers }) {
                 </div>
               </div>
               <div style={{ fontSize: 12.5, fontWeight: 700, color: "#111827", flexShrink: 0 }}>
-                ${p.revenue.toLocaleString("en-US")}
+                {formatMoney(p.revenue, currencyCode)}
               </div>
             </div>
           ))}

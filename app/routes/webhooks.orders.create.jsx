@@ -1,5 +1,6 @@
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
+import { getShopCurrency } from "../shop-currency.server";
 
 // Convertit un id numerique Shopify (line_item.product_id) en GID,
 // car app.drops.jsx stocke Drop.productIds sous forme de GIDs
@@ -78,6 +79,15 @@ export const action = async ({ request }) => {
     fromWaitlist = Boolean(waitlistEntry);
   }
 
+  // Shopify envoie toujours la devise sur la commande. Si elle manquait,
+  // ecrire un USD code en dur corromprait durablement les analytics d une
+  // boutique hors zone dollar : on se rabat sur la devise de la boutique.
+  const orderCurrency =
+    order.currency ||
+    matchingDrop.baseCurrency ||
+    (await getShopCurrency(shop, null)) ||
+    "USD";
+
   const firstProductName =
     matchingLineItems[0]?.name || matchingLineItems[0]?.title || null;
 
@@ -90,7 +100,7 @@ export const action = async ({ request }) => {
         shopifyOrderName: order.name || null,
         customerEmail,
         totalAmount,
-        currencyCode: order.currency || matchingDrop.baseCurrency || "USD",
+        currencyCode: orderCurrency,
         itemCount,
         firstProductName,
         fromWaitlist,
@@ -157,7 +167,7 @@ export const action = async ({ request }) => {
         productName: firstItemName,
         itemCount,
         totalAmount,
-        currencyCode: order.currency || matchingDrop.baseCurrency || "USD",
+        currencyCode: orderCurrency,
         fromWaitlist,
       },
     },

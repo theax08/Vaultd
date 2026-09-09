@@ -4,6 +4,7 @@ import { buildUnsubscribeUrl, buildLogoUrl } from "./unsubscribe.server";
 import { formatEmailDateTime, formatEmailTime } from "./email-templates";
 import { getAccountForShop } from "./vaultd-account.server";
 import { PLAN_FEATURES } from "./vaultd-plans";
+import { getShopCurrency } from "./shop-currency.server";
 
 // Delai sans nouvelle vente apres sold-out avant de cloturer automatiquement
 // (couvre le cas ou le vendeur n'est pas present pendant son drop).
@@ -193,6 +194,12 @@ export async function endDrop(drop) {
   const maxUnits = drop.maxUnits ?? 0;
   const soldOut = maxUnits > 0 ? totalItemsSold >= maxUnits : false;
 
+  // La devise vient des vraies commandes du drop (ce que le client a
+  // effectivement paye), pas d un USD code en dur qui faussait le montant
+  // affiche pour toute boutique hors zone dollar. Sans commande ni devise
+  // connue, on ne devine pas : on laisse la valeur existante intacte.
+  const shopCurrency = await getShopCurrency(shopDomain, null);
+  const resolvedCurrency = orders[0]?.currencyCode || shopCurrency || null;
   // updateMany + where:status:"LIVE", meme raisonnement que launchDrop : rend
   // la cloture atomique face a un appel concurrent (cron vs bouton manuel vs
   // un autre poll) pour ne pas doubler l'email "drop ended" a la waitlist.
@@ -210,7 +217,7 @@ export async function endDrop(drop) {
       finalInterestRate: interestRate,
       finalDealRate: dealRate,
       selloutTimeSeconds,
-      baseCurrency: "USD",
+      ...(resolvedCurrency ? { baseCurrency: resolvedCurrency } : {}),
       soldOut,
     },
   });

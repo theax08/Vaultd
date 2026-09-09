@@ -106,6 +106,16 @@ const shopify = shopifyApp({
     // a reinstalling merchant would keep full paid access with no fresh
     // charge. This runs a live check instead of trusting stored state.
     afterAuth: async ({ session, admin }) => {
+      // Devise de la boutique mise en cache des l installation, pour que
+      // les pages d analytics n aient pas a interroger Shopify a chaque
+      // affichage d un montant.
+      try {
+        const { getShopCurrency } = await import("./shop-currency.server");
+        await getShopCurrency(session.shop, admin);
+      } catch (err) {
+        console.error("[afterAuth] currency sync failed for", session.shop, err?.message ?? err);
+      }
+
       try {
         const { getAccountForShop } = await import("./vaultd-account.server");
         const db = (await import("./db.server")).default;

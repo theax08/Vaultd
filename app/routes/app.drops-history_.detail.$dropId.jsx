@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useLoaderData, Link } from "react-router";
 import { monoNumberStyle } from "../styles/pop-ui";
+import { getDropCurrency } from "../shop-currency.server";
+import { formatMoney } from "../money";
 
 // Heatmap — un pas fixe (toujours minutes, ex.) n'a pas de sens sur un drop
 // d'1 minute (secondes) ni sur un drop de 6h (heures). VAULTD-DESIGN-emails
@@ -107,7 +109,7 @@ export const loader = async ({ params, request }) => {
     dbModule.client ??
     dbModule;
 
-  const { session } = await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
   const shopDomain = session.shop;
   const dropId = params.dropId;
 
@@ -338,8 +340,13 @@ export const loader = async ({ params, request }) => {
     ...dropWithoutEntries
   } = drop;
 
+  // Devise reelle du drop (celle de ses commandes) : cette page formatait
+  // tout en dollars, exports CSV et PDF compris.
+  const currencyCode = await getDropCurrency(drop, shopDomain, admin);
+
   return {
     drop: dropWithoutEntries,
+    currencyCode,
     previousDrop,
     metrics: {
       revenue,
@@ -377,7 +384,7 @@ export const loader = async ({ params, request }) => {
 const rankColor = (i) => (i === 0 ? "var(--vaultd-accent, #1a1a1a)" : "var(--vd-ink-3, #8B93A0)");
 
 export default function DropDetailPage() {
-  const { drop, previousDrop, metrics, funnel, heatmap, productRanking } =
+  const { drop, previousDrop, metrics, funnel, heatmap, productRanking, currencyCode } =
     useLoaderData();
   const {
     revenue,
@@ -493,7 +500,7 @@ export default function DropDetailPage() {
     y += 4;
 
     addLine("Key metrics", 13, true);
-    addLine(`Total revenue: ${revenue.toLocaleString("en-US", { style: "currency", currency: "USD" })}`);
+    addLine(`Total revenue: ${formatMoney(revenue, currencyCode)}`);
     addLine(`Conversion rate: ${conversionRate !== null ? conversionRate.toFixed(1) + "%" : "N/A"}`);
     addLine(`Interest rate: ${interestRate !== null ? interestRate.toFixed(1) + "%" : "N/A"}`);
     addLine(`Deal rate: ${dealRate !== null ? dealRate.toFixed(1) + "%" : "N/A"}`);
@@ -518,10 +525,7 @@ export default function DropDetailPage() {
           y = 18;
         }
         addLine(
-          `${i + 1}. ${p.productName} — ${p.unitsSold} sold — ${p.revenue.toLocaleString("en-US", {
-            style: "currency",
-            currency: "USD",
-          })} — ${p.selloutLabel}`
+          `${i + 1}. ${p.productName} — ${p.unitsSold} sold — ${formatMoney(p.revenue, currencyCode)} — ${p.selloutLabel}`
         );
       });
     }
@@ -722,11 +726,11 @@ export default function DropDetailPage() {
         {[
           {
             label: "Total revenue",
-            value: revenue.toLocaleString("en-US", { style: "currency", currency: "USD" }),
+            value: formatMoney(revenue, currencyCode),
             deltaPct: revenueDeltaPct,
             sub:
               previousDrop && previousRevenue !== null
-                ? `vs ${previousRevenue.toLocaleString("en-US", { style: "currency", currency: "USD" })} (${previousDrop.name})`
+                ? `vs ${formatMoney(previousRevenue, currencyCode)} (${previousDrop.name})`
                 : "1st drop — nothing to compare yet",
           },
           {
@@ -1001,7 +1005,7 @@ export default function DropDetailPage() {
                 </div>
                 <div style={{ width: 90, textAlign: "right" }}>
                   <div style={{ fontSize: 13.5, fontWeight: 800, color: "#1a1a1a", ...monoNumberStyle }}>
-                    {p.revenue.toLocaleString("en-US", { style: "currency", currency: "USD" })}
+                    {formatMoney(p.revenue, currencyCode)}
                   </div>
                   {p.revenueDeltaPct !== null && (
                     <div

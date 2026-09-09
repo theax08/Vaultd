@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Link, redirect, useLoaderData } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
+import { getShopCurrency } from "../shop-currency.server";
+import { formatMoney } from "../money";
 import { getAccountForShop } from "../vaultd-account.server";
 import { PLAN_ORDER, PLAN_SUMMARIES, PLAN_FEATURES, getPlanFeatureList, getNewlyUnlockedFeatures } from "../vaultd-plans";
 import {
@@ -15,7 +17,7 @@ import {
 } from "../styles/pop-ui";
 
 export const loader = async ({ request }) => {
-  const { session } = await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
   const shopDomain = session.shop;
   const url = new URL(request.url);
 
@@ -114,6 +116,10 @@ export const loader = async ({ request }) => {
     { done: endedDrops.length > 0, label: "Complete your first drop", to: "/app/drops-history" },
   ];
 
+  // Le total ci-dessus agrege TOUS les drops : c est la devise de la
+  // boutique qui fait foi, pas celle d une commande en particulier.
+  const currencyCode = await getShopCurrency(shopDomain, admin);
+
   const rawPlan = account?.plan ?? null;
   const plan = PLAN_ORDER.includes(rawPlan) ? rawPlan : null;
 
@@ -128,6 +134,7 @@ export const loader = async ({ request }) => {
     steps,
     recentDrops,
     plan,
+    currencyCode,
     features: PLAN_FEATURES[plan] ?? [],
     // Une simple inegalite lastSeenPlan !== plan se declenche aussi sur une
     // RETROGRADATION (le champ n'est jamais remis a jour a la baisse) — le
@@ -272,7 +279,8 @@ function HomeTour({ onDismiss }) {
 }
 
 export default function Dashboard() {
-  const { stats, steps, recentDrops, plan, features, hasNewFeatures, hasScheduledDropWithNoActiveEmails } = useLoaderData();
+  const { stats, steps, recentDrops, plan, features, currencyCode, hasNewFeatures, hasScheduledDropWithNoActiveEmails } =
+    useLoaderData();
 
   const completedSteps = steps.filter((s) => s.done).length;
   const nextStep = steps.find((s) => !s.done);
@@ -334,7 +342,7 @@ export default function Dashboard() {
           <div style={{ ...cardPadded, borderTop: "3px solid var(--vaultd-accent, #1a1a1a)" }}>
             <div style={cardLabel}>TOTAL REVENUE</div>
             <div style={{ fontSize: 22, fontWeight: 700, color: "#1a1a1a", ...monoNumberStyle }}>
-              ${stats.totalRevenue.toLocaleString("en-US")}
+              {formatMoney(stats.totalRevenue, currencyCode)}
             </div>
             <div style={{ fontSize: 11.5, color: "#919191" }}>All drops combined</div>
           </div>

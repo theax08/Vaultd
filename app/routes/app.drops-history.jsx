@@ -2,6 +2,8 @@ import React from "react";
 import { useLoaderData, Link } from "react-router";
 import { GridIcon, pageHeaderTitleStyle, HighlightText, PlanLockedPage, monoNumberStyle } from "../styles/pop-ui";
 import { getAccountForShop } from "../vaultd-account.server";
+import { getShopCurrency } from "../shop-currency.server";
+import { formatMoney } from "../money";
 import { PLAN_ORDER } from "../vaultd-plans";
 
 export const loader = async ({ request }) => {
@@ -17,7 +19,7 @@ export const loader = async ({ request }) => {
     dbModule.client ??
     dbModule;
 
-  const { session } = await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
   const shopDomain = session.shop;
 
   const account = await getAccountForShop(shopDomain);
@@ -35,6 +37,10 @@ export const loader = async ({ request }) => {
       },
     };
   }
+
+  // Devise de la boutique : tous les montants de cette page etaient
+  // formates en dollars, quelle que soit la devise reelle du marchand.
+  const currencyCode = await getShopCurrency(shopDomain, admin);
 
   const { runAutoDropLifecycle } = await import("../drop-lifecycle.server");
   await runAutoDropLifecycle(shopDomain);
@@ -144,7 +150,7 @@ export const loader = async ({ request }) => {
     });
 
     const revenueNumber = drop.finalRevenue ? Number(drop.finalRevenue) : 0;
-    const revenueLabel = `$${revenueNumber.toLocaleString("en-US")}`;
+    const revenueLabel = formatMoney(revenueNumber, currencyCode);
 
     const convRateNumber =
       typeof drop.finalConversionRate === "number"
@@ -258,6 +264,7 @@ export const loader = async ({ request }) => {
 
   return {
     drops: mappedDrops,
+    currencyCode,
     summary,
   };
 };
@@ -291,7 +298,7 @@ function sortValue(drop, key) {
 }
 
 export default function DropsHistoryPage() {
-  const { locked, drops, summary } = useLoaderData();
+  const { locked, drops, summary, currencyCode } = useLoaderData();
 
   const [search, setSearch] = React.useState("");
   const [statusFilter, setStatusFilter] = React.useState([]);
@@ -364,9 +371,7 @@ export default function DropsHistoryPage() {
   }
 
   // Formattage des KPI de header
-  const totalRevenueLabel = `$${summary.totalRevenueAllDrops.toLocaleString(
-    "en-US"
-  )}`;
+  const totalRevenueLabel = formatMoney(summary.totalRevenueAllDrops, currencyCode);
   const avgConvLabel =
     summary.avgConvRate != null
       ? `${summary.avgConvRate.toFixed(1)}%`

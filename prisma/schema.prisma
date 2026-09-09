@@ -65,6 +65,10 @@ model ShopSettings {
   botProtectionEnabled Boolean        @default(false)
   turnstileSiteKey     String?
   turnstileSecretKey   String?
+  // Devise de la boutique (ISO 4217), lue via l API Admin et mise en
+  // cache ici : elle ne change quasi jamais et sert a formater tous les
+  // montants du marchand. null = pas encore synchronisee.
+  currencyCode         String?
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
   vaultdAccountId      String?
@@ -94,7 +98,9 @@ model Drop {
   finalInterestRate      Float?
   finalDealRate          Float?
   selloutTimeSeconds     Int?
-  baseCurrency           String?   @default("USD")
+  // Pas de defaut : un defaut USD estampillait chaque drop en dollar et
+  // primait sur la devise reelle de la boutique. NULL = pas encore connue.
+  baseCurrency           String?
   soldOut                Boolean?  @default(false)
   autoLaunch             Boolean   @default(false)
   maxWaitlistSize        Int?
@@ -200,7 +206,7 @@ model WaitlistEntry {
   drop                  Drop            @relation(fields: [dropId], references: [id], onDelete: Cascade)
   email                 String
   customerName          String?
-  referralCode          String          @default(cuid()) @unique
+  referralCode          String          @unique @default(cuid())
   referredById          String?
   referredBy            WaitlistEntry?  @relation("Referrals", fields: [referredById], references: [id])
   referrals             WaitlistEntry[] @relation("Referrals")

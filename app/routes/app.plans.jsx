@@ -314,6 +314,13 @@ export default function PlansPage() {
       <p style={{ fontSize: 12, color: "#919191", marginTop: 16 }}>
         Per-store add-on: +$50/month per additional store.
       </p>
+      {/* Les tarifs Vaultd sont libelles en USD et convertis par Shopify :
+          sans cette mention, "$49" est ambigu pour un marchand facture en
+          CAD, AUD ou NZD. */}
+      <p style={{ fontSize: 12, color: "#919191", marginTop: 4 }}>
+        All Vaultd prices are in USD. Shopify bills you in your store&rsquo;s currency,
+        converting at the exchange rate in effect at the time of each charge.
+      </p>
       <p style={{ fontSize: 12, color: "#919191", marginTop: 8, padding: "10px 14px", background: "#f9f9f9", borderRadius: 8, border: "1px solid #e3e3e3" }}>
         <strong style={{ color: "#1a1a1a" }}>Note:</strong> Vaultd is a drop management and analytics tool. It does not process, collect, or handle any payments from your customers. All transactions from your drops happen directly through your Shopify store checkout.
       </p>
